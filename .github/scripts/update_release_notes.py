@@ -15,8 +15,8 @@ from pathlib import Path
 
 START = "<!-- ShaaenFCT:changelog:start -->"
 END = "<!-- ShaaenFCT:changelog:end -->"
-VERSION_RE = re.compile(r"^v(\\d+)\\.(\\d+)\\.(\\d+)$")
-CONVENTIONAL_RE = re.compile(r"^(feat|fix|perf|refactor|docs|build|chore|ci|test|style)(?:\\([^)]*\\))?!?:\\s*(.+)$", re.I)
+VERSION_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+CONVENTIONAL_RE = re.compile(r"^(feat|fix|perf|refactor|docs|build|chore|ci|test|style)(?:\([^)]*\))?!?:\s*(.+)$", re.I)
 
 
 def gh(*args):
@@ -39,9 +39,9 @@ def grouped_commits(commits, repository):
         subject = item["commit"]["message"].splitlines()[0].strip()
         match = CONVENTIONAL_RE.match(subject)
         kind, title = (match.group(1).lower(), match.group(2).strip()) if match else ("", subject)
-        if kind == "feat" or re.match(r"^(add|added|ajout|ajouter)\\b", subject, re.I):
+        if kind == "feat" or re.match(r"^(add|added|ajout|ajouter)\b", subject, re.I):
             section = "Ajouts"
-        elif kind == "fix" or re.match(r"^(fix|fixed|correct|correction)\\b", subject, re.I):
+        elif kind == "fix" or re.match(r"^(fix|fixed|correct|correction)\b", subject, re.I):
             section = "Corrections"
         else:
             section = "Maintenance et documentation"
@@ -83,13 +83,13 @@ def main():
         f"## Modifications depuis {previous}",
         "",
         "### Ajouts",
-        *sections["Ajouts"] if sections["Ajouts"] else ["- Aucun commit d'ajout distinct pour cette version."],
+        *(sections["Ajouts"] or ["- Aucun commit d'ajout distinct pour cette version."]),
         "",
         "### Corrections",
-        *sections["Corrections"] if sections["Corrections"] else ["- Aucun commit de correction distinct pour cette version."],
+        *(sections["Corrections"] or ["- Aucun commit de correction distinct pour cette version."]),
         "",
         "### Maintenance et documentation",
-        *sections["Maintenance et documentation"] if sections["Maintenance et documentation"] else ["- Aucun."],
+        *(sections["Maintenance et documentation"] or ["- Aucun."]),
         "",
         f"**Comparaison complète :** https://github.com/{repository}/compare/{previous}...{requested_tag}",
         END,
@@ -101,7 +101,7 @@ def main():
         preserved = re.sub(re.escape(START) + r".*?" + re.escape(END), "", existing, count=1, flags=re.S).strip()
     else:
         preserved = existing.strip()
-    body = (preserved + "\\n\\n" if preserved else "") + "\\n".join(generated) + "\\n"
+    body = (preserved + "\n\n" if preserved else "") + "\n".join(generated) + "\n"
     if existing.strip() == body.strip():
         print(f"{requested_tag}: release notes already up to date")
         return
