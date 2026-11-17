@@ -1,0 +1,49 @@
+name: Publish ShaaenFCT v0.7.29
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v0.7.29.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'NLshaen/ShaaenFCT'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out verified v0.7.29 source
+        uses: actions/checkout@v4
+        with:
+          ref: 3f9e71755a1bc0af810d9353db101c54fc202c96
+
+      - name: Build and validate ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^## Version: 0.7.29$' shaaenFCT.toc
+          grep -q 'setFont(normalPreview,22,db.font)' Core.lua
+          grep -q 'setFont(critPreview,26,db.critFont)' Core.lua
+          mkdir -p staging/shaaenFCT
+          cp -R Core.lua Integration.lua shaaenFCT.toc README.txt Fonts Libs staging/shaaenFCT/
+          (cd staging && zip -qr "$GITHUB_WORKSPACE/ShaaenFCT_v0.7.29.zip" shaaenFCT)
+          unzip -t ShaaenFCT_v0.7.29.zip
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v0.7.29 --repo NLshaen/ShaaenFCT >/dev/null 2>&1; then
+            gh release upload v0.7.29 ShaaenFCT_v0.7.29.zip --repo NLshaen/ShaaenFCT --clobber
+          else
+            gh release create v0.7.29 ShaaenFCT_v0.7.29.zip \
+              --repo NLshaen/ShaaenFCT \
+              --target 3f9e71755a1bc0af810d9353db101c54fc202c96 \
+              --title "ShaaenFCT_v0.7.29" \
+              --notes "### Corrections\n- Initialisation des polices des aperçus Typography / Fonts avant SetText().\n- Prévention de l'erreur FontString:SetText(): Font not set sur WoW Forever.\n- Conservation des polices choisies et repli Blizzard pour les polices indisponibles.\n\nCommit : 3f9e71755a1bc0af810d9353db101c54fc202c96\n\n### Installation\nRemplacer le dossier shaaenFCT dans Interface/AddOns puis faire /reload." \
+              --latest
+          fi
