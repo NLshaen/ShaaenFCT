@@ -23,4 +23,4 @@ See [`README.txt`](README.txt) for version-specific instructions and known clien
 
 In Smart mode, configure the game's Combat Log with **My Actions**, including pet and miss/block events. WoW Forever's `UNIT_COMBAT` events may not identify the source of damage.
 
-The original full addon archive is provided separately as `shaaenFCT_0.7.27_blocked_damage_fix.zip` in this conversation. This repository contains the extracted source files.
+The original full addon archive is provided separately as `shaaenFCT_0.7.27.zip` in this conversation. This repository contains the extracted source files.
