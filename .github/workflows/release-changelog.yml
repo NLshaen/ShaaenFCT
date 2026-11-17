@@ -12,6 +12,7 @@ on:
     workflows:
       - Release
       - Publish shaaenFCT v0.7.28
+      - Publish ShaaenFCT v0.7.29
     types: [completed]
   workflow_dispatch:
 
