@@ -82,24 +82,48 @@ def main():
 
     try:
         release = get_release(token, tag)
-        if release.get("draft") or release.get("prerelease"):
-            print(f"Skipping draft/prerelease {release['tag_name']}")
-            return
-        payload = json.dumps(discord_payload(release), ensure_ascii=False).encode("utf-8")
-        request = Request(
-            webhook,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
+    except HTTPError as error:
+        sys.exit(f"GitHub API HTTP error: {error.code}")
+    except URLError as error:
+        sys.exit(f"GitHub API connection error: {error.reason}")
+
+    if release.get("draft") or release.get("prerelease"):
+        print(f"Skipping draft/prerelease {release['tag_name']}")
+        return
+
+    payload = json.dumps(discord_payload(release), ensure_ascii=False).encode("utf-8")
+    request = Request(
+        webhook,
+        data=payload,
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "Accept": "application/json",
+            # Discord's HTTP API requires an identifying User-Agent. The
+            # default Python-urllib agent can be blocked by Cloudflare (403).
+            "User-Agent": "DiscordBot (https://github.com/NLshaen/ShaaenFCT, 1.0.1)",
+        },
+        method="POST",
+    )
+    try:
         with urlopen(request, timeout=20) as response:
             if response.status not in (200, 204):
                 sys.exit(f"Unexpected Discord HTTP status {response.status}")
     except HTTPError as error:
-        # Do not print the webhook URL (it contains a secret token).
-        sys.exit(f"GitHub/Discord HTTP error: {error.code}")
+        # Show only the HTTP status and Discord's numeric API code: never
+        # print the webhook URL/token or untrusted HTML response body.
+        response_body = error.read(4096)
+        try:
+            details = json.loads(response_body)
+        except (ValueError, UnicodeDecodeError):
+            details = {}
+        discord_code = details.get("code") if isinstance(details, dict) else None
+        if isinstance(discord_code, int):
+            sys.exit(f"Discord HTTP error: {error.code} (Discord API code: {discord_code})")
+        if error.code == 403:
+            sys.exit("Discord HTTP error: 403 (non-JSON response; possible Cloudflare block)")
+        sys.exit(f"Discord HTTP error: {error.code}")
     except URLError as error:
-        sys.exit(f"GitHub/Discord connection error: {error.reason}")
+        sys.exit(f"Discord connection error: {error.reason}")
 
     print(f"Posted {release['tag_name']} changelog to Discord")
 
