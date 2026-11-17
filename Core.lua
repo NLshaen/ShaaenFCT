@@ -105,6 +105,7 @@ local baseFonts = {
 }
 local defaults = {
  enabled=true, discordInvite='', damageSource='smart', petAssist=true, showKillingBlow=true, overkillDuration=1.35, overkillShakeIntensity='medium', font=defaultFont, critFont=defaultFont, uiFont=defaultUIFont,
+ uiColorStyle='ember', settingsSection='general', windowScale=100, windowOpacity=100,
  outline=true, size=27, critScale=1.5, duration=.9, startY=22,
  rise=65, arc=65, curve=40, fade=55, direction='alternate', animationStyle='arc',
  popupDirection='alternate', floatDirection='alternate', bounceDirection='alternate',
@@ -1180,6 +1181,24 @@ engine:SetScript('OnUpdate',function(_,elapsed)
 end)
 -- UI helpers. Compact charcoal/orange typographic style inspired by
 -- clean WoW addon suites. All UI font faces remain user-configurable.
+-- Settings color palettes apply only to the addon configuration window.
+-- Combat damage colors and the independent Overkill FX never use this palette.
+local uiButtons,uiAccentTexts,uiAccentTextures={},{},{}
+local UI_COLOR_STYLES={
+ ember={name='Ember Orange',accent={1,.59,.30},soft={1,.77,.54},window={.067,.078,.094},sidebar={.080,.092,.113},button={.135,.15,.19},hover={.85,.42,.15}},
+ glacier={name='Glacier Blue',accent={.34,.72,1},soft={.69,.87,1},window={.063,.080,.104},sidebar={.073,.101,.132},button={.116,.163,.206},hover={.20,.53,.82}},
+ emerald={name='Emerald',accent={.33,.87,.62},soft={.68,1,.84},window={.057,.080,.073},sidebar={.070,.103,.092},button={.112,.160,.139},hover={.17,.64,.39}},
+ amethyst={name='Amethyst',accent={.78,.58,1},soft={.89,.77,1},window={.081,.072,.107},sidebar={.104,.084,.134},button={.164,.137,.207},hover={.55,.31,.80}},
+ graphite={name='Graphite',accent={.84,.87,.92},soft={1,1,1},window={.073,.079,.091},sidebar={.091,.098,.111},button={.155,.164,.181},hover={.60,.66,.74}},
+}
+local function currentUISkin()
+ return UI_COLOR_STYLES[db and db.uiColorStyle] or UI_COLOR_STYLES.ember
+end
+local function tintTexture(tx,c,a)
+ if not tx or not c then return end
+ if tx.SetColorTexture then tx:SetColorTexture(c[1],c[2],c[3],a or 1)
+ else tx:SetTexture('Interface\\Buttons\\WHITE8X8');tx:SetVertexColor(c[1],c[2],c[3],a or 1) end
+end
 local function trackUI(fs,size)
  setFont(fs,size,db.uiFont or defaultUIFont)
  uiTextEntries[#uiTextEntries+1]={fs=fs,size=size}
@@ -1203,8 +1222,27 @@ local function button(parent,caption,x,y,width,height,click,accent)
  if width==499 and x==220 and parent._shaaenOptionPanel then
   b:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-36,y)
  end
- colorTexture(b,accent and .24 or .135,accent and .17 or .15,accent and .14 or .19,1)
+ local background=colorTexture(b,accent and .24 or .135,accent and .17 or .15,accent and .14 or .19,1)
  local stripe=fixedTexture(b,'TOPLEFT',0,0,2,height or 30,accent and .98 or .29,accent and .52 or .32,accent and .27 or .38,1)
+ local hover=b:CreateTexture(nil,'BACKGROUND',nil,1)
+ hover:SetAllPoints(b);tintTexture(hover,currentUISkin().hover)
+ hover:SetAlpha(0)
+ local function animateHover(self,target)
+  self._hoverTarget=target
+  self:SetScript('OnUpdate',function(frame,elapsed)
+   local old=hover:GetAlpha()
+   local nextAlpha=old+(frame._hoverTarget-old)*math.min(1,elapsed*16)
+   if math.abs(nextAlpha-frame._hoverTarget)<.008 then
+    nextAlpha=frame._hoverTarget;frame:SetScript('OnUpdate',nil)
+   end
+   hover:SetAlpha(nextAlpha)
+  end)
+ end
+ b:SetScript('OnEnter',function(self) animateHover(self,.27) end)
+ b:SetScript('OnLeave',function(self) animateHover(self,0) end)
+ b._skinStripe=stripe;b._skinHover=hover;b._skinAccent=accent
+ b._skinBackground=background
+ uiButtons[#uiButtons+1]=b
  local t=b:CreateFontString(nil,'OVERLAY')
  t:SetPoint('CENTER');trackUI(t,12);t:SetText(caption)
  t:SetTextColor(1,accent and .81 or .91,accent and .62 or .95)
@@ -1212,20 +1250,24 @@ local function button(parent,caption,x,y,width,height,click,accent)
  b:SetScript('OnClick',click or function() end)
  return b
 end
-local function header(parent,title,subtitle)
- label(parent,title,215,-90,24,.98,.98,.99)
- label(parent,subtitle,215,-125,12,.61,.66,.72)
- local rule=fixedTexture(parent,'TOPLEFT',215,-148,505,1,.25,.28,.33,.85)
- rule:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-35,-148)
- fixedTexture(parent,'TOPLEFT',215,-148,60,2,.94,.50,.25,1)
+local function header(parent,title,subtitle,settingsPage)
+ local shift=settingsPage and 44 or 0
+ label(parent,title,215,-90-shift,24,.98,.98,.99)
+ label(parent,subtitle,215,-125-shift,12,.61,.66,.72)
+ local rule=fixedTexture(parent,'TOPLEFT',215,-148-shift,505,1,.25,.28,.33,.85)
+ rule:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-35,-148-shift)
+ local accentRule=fixedTexture(parent,'TOPLEFT',215,-148-shift,60,2,.94,.50,.25,1)
+ uiAccentTextures[#uiAccentTextures+1]=accentRule
 end
 local function section(parent,title,y)
- label(parent,title,220,y,12,1,.62,.35)
+ local fs=label(parent,title,220,y,12,1,.62,.35)
+ uiAccentTexts[#uiAccentTexts+1]=fs
 end
 local function valueSlider(parent,key,title,y,formatSuffix)
  local r=ranges[key]
  label(parent,title,222,y,13,.89,.92,.95)
  local value=label(parent,'',671,y,13,1,.72,.42)
+ uiAccentTexts[#uiAccentTexts+1]=value
  value:ClearAllPoints();value:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-32,y)
  value:SetWidth(52);value:SetJustifyH('RIGHT')
  local slider=CreateFrame('Slider',nil,parent)
@@ -1254,7 +1296,7 @@ local function valueSlider(parent,key,title,y,formatSuffix)
 end
 local function createWindow()
  if window then return window end
- uiTextEntries={}
+ uiTextEntries={};uiButtons={};uiAccentTexts={};uiAccentTextures={}
  local w=CreateFrame('Frame',nil,UIParent)
  window=w
  -- Reserve space for a persistent bottom action bar on every tab.
@@ -1264,6 +1306,8 @@ local function createWindow()
   return math.max(minimum,math.min(maximum,n))
  end
  w:SetSize(clampSize(db.windowWidth,minWidth,maxWidth),clampSize(db.windowHeight,minHeight,maxHeight))
+ w:SetScale((db.windowScale or 100)/100)
+ w:SetAlpha((db.windowOpacity or 100)/100)
  w:SetPoint('CENTER',UIParent,'CENTER',
   type(db.windowX)=='number' and db.windowX or 0,
   type(db.windowY)=='number' and db.windowY or 0)
@@ -1296,9 +1340,10 @@ local function createWindow()
   for _,fn in ipairs(responsiveLayouts) do fn(extra) end
  end
  w:SetScript('OnSizeChanged',function() layoutTabs() end)
- colorTexture(w,.067,.078,.094,.99)
+ local windowBG=colorTexture(w,.067,.078,.094,.99)
  -- Stretch decorative panels with the window; controls retain safe fixed positions.
  local topEdge=fixedTexture(w,'TOPLEFT',0,0,755,3,.93,.48,.24,1)
+ uiAccentTextures[#uiAccentTextures+1]=topEdge
  topEdge:ClearAllPoints();topEdge:SetPoint('TOPLEFT',w,'TOPLEFT');topEdge:SetPoint('TOPRIGHT',w,'TOPRIGHT')
  local topDivider=fixedTexture(w,'TOPLEFT',0,-68,755,1,.20,.24,.29,1)
  topDivider:ClearAllPoints();topDivider:SetPoint('TOPLEFT',w,'TOPLEFT',0,-68)
@@ -1311,7 +1356,8 @@ local function createWindow()
  if resizeGrip.SetFrameLevel and w.GetFrameLevel then resizeGrip:SetFrameLevel(w:GetFrameLevel()+30) end
  resizeGrip:EnableMouse(true);resizeGrip:RegisterForDrag('LeftButton')
  for index=1,3 do
-  fixedTexture(resizeGrip,'BOTTOMRIGHT',-(index*5),index*5,3,3,1,.59,.29,.85)
+  local gripDot=fixedTexture(resizeGrip,'BOTTOMRIGHT',-(index*5),index*5,3,3,1,.59,.29,.85)
+  uiAccentTextures[#uiAccentTextures+1]=gripDot
  end
  resizeGrip:SetScript('OnDragStart',function(self)
   if not (InCombatLockdown and InCombatLockdown()) then self:GetParent():StartSizing('BOTTOMRIGHT') end
@@ -1329,19 +1375,24 @@ local function createWindow()
  local emblem=CreateFrame('Frame',nil,w)
  emblem:SetPoint('TOPLEFT',17,-15);emblem:SetSize(35,36)
  colorTexture(emblem,.14,.16,.20,1)
- fixedTexture(emblem,'TOPLEFT',0,0,35,2,.98,.54,.28,1)
+ local emblemRule=fixedTexture(emblem,'TOPLEFT',0,0,35,2,.98,.54,.28,1)
+ uiAccentTextures[#uiAccentTextures+1]=emblemRule
  local initials=emblem:CreateFontString(nil,'OVERLAY')
+ uiAccentTexts[#uiAccentTexts+1]=initials
  initials:SetPoint('CENTER',0,-1);trackUI(initials,19)
  initials:SetText('NL');initials:SetTextColor(1,.72,.43)
  label(w,'SHAAEN',63,-12,23,.96,.96,.97)
- label(w,'FCT',164,-12,23,1,.58,.27)
+ local fctTitle=label(w,'FCT',164,-12,23,1,.58,.27)
+ uiAccentTexts[#uiAccentTexts+1]=fctTitle
  label(w,'FLOATING COMBAT TEXT',64,-43,10,.61,.66,.73)
  -- Versions are displayed in the sidebar footer, not in the top title bar.
  -- Window actions live in the bottom-right footer, clear of the resize grip.
  local sidebarDivider=fixedTexture(w,'TOPLEFT',191,-69,1,645,.25,.27,.33,1)
  sidebarDivider:ClearAllPoints();sidebarDivider:SetPoint('TOPLEFT',w,'TOPLEFT',191,-69)
  sidebarDivider:SetPoint('BOTTOMLEFT',w,'BOTTOMLEFT',191,0)
- local tabs,tabButtons={},{}
+ -- Main navigation keeps Settings, Animation, Help and About separate.
+ -- Settings contains General, Style and Fonts sub-tabs that share this window.
+ local tabs,tabButtons,settingsButtons={}, {}, {}
  local fontPopups={}
  local function addTab(key)
   local p=CreateFrame('Frame',nil,w)
@@ -1350,34 +1401,105 @@ local function createWindow()
   return p
  end
  local general=addTab('general')
+ local stylePane=addTab('style')
  local typeface=addTab('fonts')
  local animation=addTab('animation')
  local about=addTab('about')
  local help=addTab('help')
- local refreshGeneral,refreshFonts
- local function selectTab(key)
-  for _,popup in ipairs(fontPopups) do popup:Hide() end
-  for k,p in pairs(tabs) do if k==key then p:Show() else p:Hide() end end
+ local refreshGeneral,refreshFonts,refreshStyle
+ local settingsBar=CreateFrame('Frame',nil,w)
+ settingsBar:SetPoint('TOPLEFT',w,'TOPLEFT',213,-78)
+ settingsBar:SetPoint('TOPRIGHT',w,'TOPRIGHT',-35,-78)
+ settingsBar:SetHeight(42)
+ if settingsBar.SetFrameLevel and w.GetFrameLevel then
+  settingsBar:SetFrameLevel(w:GetFrameLevel()+8)
+ end
+ local mainPage='settings'
+ local function markTabs()
+  local skin=currentUISkin()
+  local chosen=(mainPage=='settings') and (db.settingsSection or 'general') or mainPage
+  for key,p in pairs(tabs) do if key==chosen then p:Show() else p:Hide() end end
+  if mainPage=='settings' then settingsBar:Show() else settingsBar:Hide() end
   for k,b in pairs(tabButtons) do
-   if b.accentLine then
-    if k==key then b.accentLine:SetAlpha(1) else b.accentLine:SetAlpha(0) end
-   end
-   b.caption:SetTextColor(k==key and 1 or .70,k==key and .65 or .74,k==key and .33 or .80)
+   local selected=(k==mainPage)
+   b.accentLine:SetAlpha(selected and 1 or 0)
+   local c=selected and skin.soft or {.70,.74,.80}
+   b.caption:SetTextColor(c[1],c[2],c[3])
   end
-  if key=='general' and refreshGeneral then refreshGeneral() end
-  if key=='fonts' and refreshFonts then refreshFonts() end
+  for k,b in pairs(settingsButtons) do
+   local selected=(mainPage=='settings' and db.settingsSection==k)
+   b.stripe:SetAlpha(selected and 1 or .35)
+   local c=selected and skin.soft or {.72,.77,.81}
+   b.caption:SetTextColor(c[1],c[2],c[3])
+  end
+  if chosen=='general' and refreshGeneral then refreshGeneral() end
+  if chosen=='fonts' and refreshFonts then refreshFonts() end
+  if chosen=='style' and refreshStyle then refreshStyle() end
+ end
+ local function selectTab(key)
+  mainPage=key
+  markTabs()
+ end
+ local function selectSettingsSection(key)
+  if key~='general' and key~='style' and key~='fonts' then return end
+  db.settingsSection=key
+  selectTab('settings')
  end
  local function nav(k,caption,y)
   local b=button(w,caption,15,y,162,43,function() selectTab(k) end)
   b.accentLine=fixedTexture(b,'TOPLEFT',0,0,4,43,1,.55,.22,1)
+  uiAccentTextures[#uiAccentTextures+1]=b.accentLine
   b.accentLine:SetAlpha(0)
   tabButtons[k]=b
  end
- nav('general','GENERAL',-95)
- nav('fonts','TYPOGRAPHY',-147)
- nav('animation','ANIMATION',-199)
- nav('help','HELP',-251)
- nav('about','ABOUT',-303)
+ nav('settings','SETTINGS',-95)
+ nav('animation','ANIMATION',-147)
+ nav('help','HELP',-199)
+ nav('about','ABOUT',-251)
+ for i,entry in ipairs({{'general','GENERAL'},{'style','STYLE'},{'fonts','FONTS'}}) do
+  local key,name=entry[1],entry[2]
+  local b=button(settingsBar,name,2+(i-1)*167,-4,158,34,function() selectSettingsSection(key) end)
+  settingsButtons[key]=b
+  addResponsive(function(extra)
+   local width=(490+extra-16)/3
+   b:ClearAllPoints()
+   b:SetPoint('TOPLEFT',settingsBar,'TOPLEFT',2+(i-1)*(width+8),-4)
+   b:SetSize(width,34)
+  end)
+ end
+ -- Top-bar sliders are independent of the content tabs and update live.
+ local function topSlider(key,title,x,minimum,maximum,apply)
+  label(w,title,x,-14,10,.80,.84,.90)
+  local current=label(w,'',x+150,-14,11,1,.70,.44)
+  uiAccentTexts[#uiAccentTexts+1]=current
+  local slider=CreateFrame('Slider',nil,w)
+  slider:SetOrientation('HORIZONTAL')
+  slider:SetPoint('TOPLEFT',w,'TOPLEFT',x,-42)
+  slider:SetSize(173,13)
+  slider:SetMinMaxValues(minimum,maximum);slider:SetValueStep(1)
+  if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
+  local track=slider:CreateTexture(nil,'BACKGROUND')
+  track:SetPoint('LEFT',slider,'LEFT');track:SetPoint('RIGHT',slider,'RIGHT')
+  track:SetHeight(4);tintTexture(track,{.30,.34,.40})
+  slider:SetThumbTexture('Interface\\Buttons\\UI-SliderBar-Button-Horizontal')
+  local thumb=slider:GetThumbTexture();if thumb then thumb:SetSize(18,21) end
+  slider:SetScript('OnValueChanged',function(_,value)
+   local n=math.floor(math.max(minimum,math.min(maximum,value))+.5)
+   db[key]=n
+   current:SetText(n..'%')
+   apply(n)
+  end)
+  slider:SetValue(db[key] or 100)
+  if key=='windowScale' then w._scaleSlider=slider else w._opacitySlider=slider end
+  addResponsive(function(extra)
+   -- Keep the entire slider group clear of the title and the window edge.
+   local shift=extra*(x==512 and 1 or .5)
+   slider:ClearAllPoints();slider:SetPoint('TOPLEFT',w,'TOPLEFT',x+shift,-42)
+   current:ClearAllPoints();current:SetPoint('TOPLEFT',w,'TOPLEFT',x+150+shift,-14)
+  end)
+ end
+ topSlider('windowScale','WINDOW SCALE',287,70,130,function(n) w:SetScale(n/100) end)
+ topSlider('windowOpacity','OPACITY',512,0,100,function(n) w:SetAlpha(n/100) end)
  -- Sidebar footer follows the lower edge when the user resizes the window.
  local wow_name_version,wow_number_version=wowClientVersions()
  local footerRule=fixedTexture(w,'BOTTOMLEFT',16,70,158,1,.23,.27,.33,.9)
@@ -1387,6 +1509,9 @@ local function createWindow()
  wowNameFooter:ClearAllPoints();wowNameFooter:SetPoint('BOTTOMLEFT',w,'BOTTOMLEFT',20,34)
  local wowNumberFooter=label(w,'v'..wow_number_version,20,-698,10,1,.60,.29)
  wowNumberFooter:ClearAllPoints();wowNumberFooter:SetPoint('BOTTOMLEFT',w,'BOTTOMLEFT',20,17)
+ uiAccentTexts[#uiAccentTexts+1]=addonFooter
+ uiAccentTexts[#uiAccentTexts+1]=wowNameFooter
+ uiAccentTexts[#uiAccentTexts+1]=wowNumberFooter
  -- Dynamically refresh versions if the same options frame remains open across UI changes.
  w:SetScript('OnShow',function()
   local newName,newVersion=wowClientVersions()
@@ -1395,9 +1520,9 @@ local function createWindow()
   wowNumberFooter:SetText('v'..newVersion)
  end)
  -- GENERAL
- header(general,'Damage source','Personal damage matching and nameplate rendering')
- section(general,'ADDON STATUS',-172)
- local enabled=button(general,'',220,-195,499,33,function()
+ header(general,'General','Addon status, combat source and final-hit effects',true)
+ section(general,'ADDON STATUS',-204)
+ local enabled=button(general,'',220,-229,499,33,function()
   db.enabled=not db.enabled
   clearNumbers();clearQueues()
   if not db.enabled then enableNative()
@@ -1405,7 +1530,7 @@ local function createWindow()
   else disableNative();if db.damageSource=='smart' then enableFilteredLog() end end
   refreshGeneral()
  end)
- section(general,'COMBAT TEXT MODE',-252)
+ section(general,'COMBAT TEXT MODE',-275)
  local choices={}
  local sourceNames={smart='SMART  /  PERSONAL DAMAGE',player='BLIZZARD  /  NATIVE DAMAGE',all='ALL DAMAGE  /  UNFILTERED'}
  local sourceDescriptions={
@@ -1419,11 +1544,11 @@ local function createWindow()
   b.description=label(b,sourceDescriptions[key],15,-29,10,.60,.64,.70)
   choices[key]=b
  end
- sourceChoice('smart',-276)
- sourceChoice('player',-333)
- sourceChoice('all',-390)
- label(general,'SMART: My Actions (Pet + Miss/Parry/Block). Own target / pet target only.',220,-459,11,.75,.79,.83)
- button(general,'OPEN COMBAT LOG',220,-488,229,34,function()
+ sourceChoice('smart',-297)
+ sourceChoice('player',-352)
+ sourceChoice('all',-407)
+ label(general,'SMART: My Actions (Pet + Miss/Parry/Block). Own target / pet target only.',220,-464,11,.75,.79,.83)
+ button(general,'OPEN COMBAT LOG',220,-489,229,34,function()
   if InCombatLockdown and InCombatLockdown() then say('Open the Combat Log outside combat.');return end
   local log=_G.COMBATLOG
   if log and type(FCF_SelectDockFrame)=='function' then
@@ -1434,12 +1559,12 @@ local function createWindow()
  end,true)
  -- Let Smart match filtered log messages on the OWN pet's current target;
  -- never infer pet hits just because a unit took damage.
- local petAssistButton=button(general,'',466,-488,253,34,function()
+ local petAssistButton=button(general,'',466,-489,253,34,function()
   db.petAssist=not db.petAssist
   clearQueues()
   refreshGeneral()
  end)
- petAssistButton:SetPoint('TOPRIGHT',general,'TOPRIGHT',-36,-488)
+ petAssistButton:SetPoint('TOPRIGHT',general,'TOPRIGHT',-36,-489)
  local killToggle=button(general,'',220,-532,499,34,function()
   db.showKillingBlow=not db.showKillingBlow
   if not db.showKillingBlow then clearOverkills() end
@@ -1467,32 +1592,35 @@ local function createWindow()
  end
 
  refreshGeneral=function()
-  enabled.caption:SetText(db.enabled and '●   ADDON ENABLED' or '○   ADDON DISABLED')
+  enabled.caption:SetText(db.enabled and '●   ENABLE  /  ON' or '○   ENABLE  /  OFF')
   petAssistButton.caption:SetText(db.petAssist and '●  OWN PET TARGET  /  ON' or '○  OWN PET TARGET  /  OFF')
   killToggle.caption:SetText(db.showKillingBlow and '●  FINAL HITS  /  EXTENDED NUMBERS' or '○  FINAL HITS  /  DISABLED')
   for _,option in ipairs(shakePresets) do
    local key,name=option[1],option[2]
    local b=shakeButtons[key]
    local selected=db.overkillShakeIntensity==key
+   local skin=currentUISkin()
    b.caption:SetText((selected and '●  ' or '○  ')..name)
    if selected then
-    b.caption:SetTextColor(1,.73,.40)
-    b.stripe:SetVertexColor(1,.58,.25,1)
+    b.caption:SetTextColor(skin.soft[1],skin.soft[2],skin.soft[3])
+    tintTexture(b.stripe,skin.accent)
    else
     b.caption:SetTextColor(.80,.83,.87)
-    b.stripe:SetVertexColor(.29,.32,.38,1)
+    tintTexture(b.stripe,{.29,.32,.38})
    end
   end
   for key,b in pairs(choices) do
    b.name:SetText((db.damageSource==key and '●  ' or '○  ')..sourceNames[key])
-   if db.damageSource==key then b.name:SetTextColor(1,.71,.38)
+   if db.damageSource==key then
+    local skin=currentUISkin()
+    b.name:SetTextColor(skin.soft[1],skin.soft[2],skin.soft[3])
    else b.name:SetTextColor(.88,.90,.94) end
   end
  end
  -- TYPOGRAPHY / isolate font UI compatibility so other panels can always build.
  local typographyOK, typographyError = pcall(function()
- header(typeface,'Typography','Select normal, critical and interface fonts')
- section(typeface,'COMBAT FONTS  /  LOCAL + LIBSHAREDMEDIA',-172)
+ header(typeface,'Fonts','Select normal, critical and interface fonts',true)
+ section(typeface,'COMBAT FONTS  /  LOCAL + LIBSHAREDMEDIA',-201)
  local fontSelectors={}
  local refreshSamples
  local function dropdown(key,name,y)
@@ -1598,35 +1726,35 @@ local function createWindow()
   popup:Hide()
   fontSelectors[key]=function() selected.caption:SetText((db[key] or defaultFont)..'    ▾') end
  end
- dropdown('font','NORMAL DAMAGE   /   WHITE',-204)
- dropdown('critFont','CRITICAL DAMAGE   /   YELLOW',-279)
- section(typeface,'SIZE & OUTLINE',-357)
- valueSlider(typeface,'size','Font size',-381,' px')
- valueSlider(typeface,'critScale','Critical scale',-420,'×')
- local outline=button(typeface,'',220,-468,499,33,function()
+ dropdown('font','NORMAL DAMAGE   /   WHITE',-225)
+ dropdown('critFont','CRITICAL DAMAGE   /   YELLOW',-288)
+ section(typeface,'SIZE & OUTLINE',-361)
+ valueSlider(typeface,'size','Font size',-386,' px')
+ valueSlider(typeface,'critScale','Critical scale',-425,'×')
+ local outline=button(typeface,'',220,-467,499,33,function()
   db.outline=not db.outline
   outline.caption:SetText(db.outline and '●  OUTLINE ON' or '○  OUTLINE OFF')
   if refreshSamples then refreshSamples() end
  end)
- section(typeface,'SETTINGS TYPOGRAPHY',-514)
- dropdown('uiFont','SETTINGS FONT   /   COMPACT UI',-532)
+ section(typeface,'SETTINGS TYPOGRAPHY',-511)
+ dropdown('uiFont','SETTINGS FONT   /   COMPACT UI',-533)
  -- Only a font registry/provider supplies third-party font data. This preview
  -- uses local sample numbers, never protected combat amounts.
  local normalPreview=typeface:CreateFontString(nil,'OVERLAY')
- normalPreview:SetPoint('TOPLEFT',220,-624)
+ normalPreview:SetPoint('TOPLEFT',220,-606)
  normalPreview:SetTextColor(1,1,1)
  normalPreview:SetText('12345')
  local critPreview=typeface:CreateFontString(nil,'OVERLAY')
- critPreview:SetPoint('TOPLEFT',481,-624)
+ critPreview:SetPoint('TOPLEFT',481,-606)
  critPreview:SetTextColor(1,.85,.15)
  critPreview:SetText('67890')
  refreshSamples=function()
   setFont(normalPreview,22,db.font)
   setFont(critPreview,26,db.critFont)
  end
- label(typeface,'WHITE  /  NORMAL',220,-657,10,.67,.72,.78)
- label(typeface,'YELLOW  /  CRITICAL',481,-657,10,.67,.72,.78)
- label(typeface,'Custom fonts: Fonts/CustomFonts.lua  ·  Also supports LibSharedMedia packs.',220,-685,10,.61,.65,.71)
+ label(typeface,'WHITE  /  NORMAL',220,-637,10,.67,.72,.78)
+ label(typeface,'YELLOW  /  CRITICAL',481,-637,10,.67,.72,.78)
+ label(typeface,'Custom fonts: Fonts/CustomFonts.lua  ·  Also supports LibSharedMedia packs.',220,-665,10,.61,.65,.71)
  refreshFonts=function()
   for _,redraw in pairs(fontSelectors) do redraw() end
   outline.caption:SetText(db.outline and '●  OUTLINE ON' or '○  OUTLINE OFF')
@@ -1638,10 +1766,62 @@ local function createWindow()
   refreshFonts=nil
   say('Typography panel compatibility error: '..tostring(typographyError))
   pcall(function()
-   header(typeface,'Typography','Font picker unavailable on this client; other sections are safe')
+   header(typeface,'Fonts','Font picker unavailable on this client; other sections are safe',true)
    label(typeface,'Try /reload or report the error shown in chat.',220,-183,12,1,.70,.42)
   end)
  end
+ -- SETTINGS > STYLE: color presets tint only interface surfaces and controls.
+ -- Never recolor floating combat text, native unit frames or game nameplates.
+ header(stylePane,'Style','Choose a color theme for the addon interface',true)
+ section(stylePane,'INTERFACE COLOR PRESETS',-207)
+ local styleEntries={
+  {'ember','EMBER ORANGE','Classic charcoal with warm orange accents'},
+  {'glacier','GLACIER BLUE','Cool blue highlights and deep navy panels'},
+  {'emerald','EMERALD','Dark forest panels with jade highlights'},
+  {'amethyst','AMETHYST','Violet highlights and plum-colored panels'},
+  {'graphite','GRAPHITE','Neutral monochrome white and grey'},
+ }
+ local styleCards={}
+ local function applyUISkin()
+  local skin=currentUISkin()
+  tintTexture(windowBG,skin.window,.99)
+  tintTexture(sidebar,skin.sidebar,.95)
+  for _,tx in ipairs(uiAccentTextures) do tintTexture(tx,skin.accent) end
+  for _,fs in ipairs(uiAccentTexts) do fs:SetTextColor(skin.soft[1],skin.soft[2],skin.soft[3]) end
+  for _,b in ipairs(uiButtons) do
+   tintTexture(b._skinBackground,b._skinAccent and skin.sidebar or skin.button)
+   tintTexture(b._skinStripe,b._skinAccent and skin.accent or {.29,.34,.39})
+   tintTexture(b._skinHover,skin.hover)
+  end
+  markTabs()
+ end
+ for i,entry in ipairs(styleEntries) do
+  local key,name,description=entry[1],entry[2],entry[3]
+  local y=-239-(i-1)*83
+  local card=button(stylePane,'',220,y,499,72,function()
+   db.uiColorStyle=key
+   applyUISkin()
+   if refreshStyle then refreshStyle() end
+  end)
+  card.caption:ClearAllPoints();card.caption:SetPoint('TOPLEFT',card,'TOPLEFT',18,-14)
+  card.caption:SetJustifyH('LEFT')
+  label(card,description,18,-42,11,.68,.73,.80)
+  local swatch=fixedTexture(card,'TOPRIGHT',-18,-18,30,30,1,.59,.30,1)
+  styleCards[key]={button=card,swatch=swatch,name=name}
+ end
+ refreshStyle=function()
+  local skin=currentUISkin()
+  for key,entry in pairs(styleCards) do
+   local selected=(db.uiColorStyle==key)
+   local color=UI_COLOR_STYLES[key].accent
+   tintTexture(entry.swatch,color)
+   entry.button.caption:SetText((selected and '●  ' or '○  ')..entry.name)
+   local c=selected and skin.soft or {.87,.90,.94}
+   entry.button.caption:SetTextColor(c[1],c[2],c[3])
+   tintTexture(entry.button.stripe,selected and skin.accent or {.29,.34,.39})
+  end
+ end
+ label(stylePane,'Color presets affect the addon UI only, not combat numbers.',220,-672,11,.63,.69,.75)
  -- ANIMATION / split controls: motion at left, normal and critical offsets at right.
  header(animation,'Animation styles','Select a style and fine-tune its movement and hit positions')
  local subTabs,subButtons={},{}
@@ -1936,7 +2116,7 @@ local function createWindow()
  -- HELP / quick start and slash commands only.
  header(help,'Help','Quick start and slash commands')
  section(help,'QUICK START',-178)
- label(help,'1. Select SMART under General.',220,-209,12)
+ label(help,'1. Open Settings > General and select SMART.',220,-209,12)
  label(help,'2. Open the Blizzard Combat Log.',220,-237,12)
  label(help,'3. Select My Actions and include Pet in its filter.',220,-265,12)
  label(help,'4. Attack a target with a visible nameplate.',220,-293,12)
@@ -1949,7 +2129,7 @@ local function createWindow()
  label(help,'/sfct status          Compact status',220,-517,12)
  label(help,'/sfct minimap show | hide | reset',220,-545,12)
  label(help,'/sfct pet on | off    Own pet target filter',220,-573,12)
- label(help,'Use the NL minimap icon for settings and quick commands.',220,-598,11,.69,.73,.77)
+ label(help,'/sfct ui reset          Restore scale and opacity to 100%.',220,-602,11,.69,.73,.77)
  -- Persistent action bar: buttons remain at the bottom-right while resizing.
  local footerLine=fixedTexture(w,'BOTTOMLEFT',207,56,506,1,.25,.28,.33,.85)
  footerLine:SetPoint('BOTTOMRIGHT',w,'BOTTOMRIGHT',-35,56)
@@ -1968,7 +2148,8 @@ local function createWindow()
  reloadFooterButton:SetPoint('RIGHT',closeFooterButton,'LEFT',-10,0)
  -- Apply initial geometry, including any previously saved resized dimensions.
  layoutTabs()
- selectTab('general')
+ applyUISkin()
+ selectTab('settings')
  w:Hide()
  return w
 end
@@ -2003,6 +2184,12 @@ engine:SetScript('OnEvent',function(_,event,...)
    db.overkillShakeIntensity=defaults.overkillShakeIntensity
   end
   if type(db.discordInvite)~='string' then db.discordInvite='' end
+  if not UI_COLOR_STYLES[db.uiColorStyle] then db.uiColorStyle='ember' end
+  if db.settingsSection~='general' and db.settingsSection~='style' and db.settingsSection~='fonts' then db.settingsSection='general' end
+  if type(db.windowScale)~='number' or db.windowScale~=db.windowScale then db.windowScale=100 end
+  db.windowScale=math.max(70,math.min(130,math.floor(db.windowScale+.5)))
+  if type(db.windowOpacity)~='number' or db.windowOpacity~=db.windowOpacity then db.windowOpacity=100 end
+  db.windowOpacity=math.max(0,math.min(100,math.floor(db.windowOpacity+.5)))
   for _,field in ipairs({'direction','popupDirection','floatDirection','bounceDirection'}) do
    if db[field]~='alternate' and db[field]~='left' and db[field]~='right' and db[field]~='random' then
     db[field]='alternate'
@@ -2205,6 +2392,17 @@ SlashCmdList.SHAAENFCT=function(msg)
   else
    say('Cannot preview: select an enemy with a visible nameplate, then /sfct overkilltest.')
   end
+  return
+ end
+ if msg=='ui reset' or msg=='windowreset' then
+  db.windowScale=100;db.windowOpacity=100
+  if window then
+   window:SetScale(1);window:SetAlpha(1)
+   if window._scaleSlider then window._scaleSlider:SetValue(100) end
+   if window._opacitySlider then window._opacitySlider:SetValue(100) end
+   window:Show()
+  else createWindow():Show() end
+  say('Settings scale and opacity restored to 100%.')
   return
  end
  if msg=='open' or msg=='options' then createWindow():Show();return end

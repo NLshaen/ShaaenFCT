@@ -1,10 +1,26 @@
-shaaenFCT 0.7.27 | WoW Forever (live version in menu footer)
+shaaenFCT 0.7.28 | WoW Forever (live version in menu footer)
 ===================================
 
 INSTALLATION
 1. Extract shaaenFCT into Interface/AddOns/.
 2. Make sure shaaenFCT contains shaaenFCT.toc and Core.lua.
 3. In game, type /reload and /sfct.
+
+SETTINGS UI REFRESH (0.7.28)
+- A smooth hover highlight now animates when the pointer enters or leaves
+  sidebar entries, Settings sub-tabs and standard addon option buttons.
+- The top bar has two live sliders: WINDOW SCALE (70-130%, default 100%) and
+  OPACITY (0-100%, default 100%). Both persist in shaaenFCTDB.
+- WARNING: 0% opacity hides the window. Type /sfct ui reset (or
+  /sfct windowreset) to restore both sliders to 100% without reloading.
+- Former GENERAL sidebar entry is now SETTINGS with three sub-tabs:
+    GENERAL: Addon status (Enable ON/OFF), Smart/Native/All modes,
+             pet target filtering, final-hit duration and shake intensity.
+    STYLE: Presets Ember Orange, Glacier Blue, Emerald, Amethyst, Graphite.
+           Style colors apply to addon settings, not floating combat text.
+    FONTS: Normal, critical and settings fonts, including custom fonts.
+- Animation, Help and About remain accessible from the left sidebar.
+- Existing combat, font and Overkill settings are preserved after upgrade.
 
 BLOCKED DAMAGE AMOUNTS (0.7.27)
 - BLOCK/BLOCKED events now display the amount supplied by UNIT_COMBAT,
