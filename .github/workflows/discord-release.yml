@@ -1,0 +1,44 @@
+name: Notify Discord on Release
+
+on:
+  # Wait until the existing workflow has finalized the release changelog.
+  workflow_run:
+    workflows: [Update Release changelog]
+    types: [completed]
+  # Manually re-send a release announcement when needed.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (leave blank for latest stable release)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discord-release-notification
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    if: >-
+      github.repository == 'NLshaen/ShaaenFCT' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event != 'push'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Discord release notifier
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Send release changelog to Discord
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 .github/scripts/notify_discord_release.py
