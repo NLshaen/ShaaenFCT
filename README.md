@@ -2,8 +2,7 @@
 
 Floating combat text addon for **WoW Forever**.
 
-Current release: **v0.7.27**.
-
+Current version: **v0.7.28**.
 ## Installation
 
 Place the repository contents in `Interface/AddOns/shaaenFCT/`, then run `/reload` in game. Open the addon configuration with `/sfct`.
@@ -23,4 +22,4 @@ See [`README.txt`](README.txt) for version-specific instructions and known clien
 
 In Smart mode, configure the game's Combat Log with **My Actions**, including pet and miss/block events. WoW Forever's `UNIT_COMBAT` events may not identify the source of damage.
 
-The original full addon archive is provided separately as `shaaenFCT_0.7.27.zip` in this conversation. This repository contains the extracted source files.
+Download the latest addon package from [GitHub Releases](https://github.com/NLshaen/ShaaenFCT/releases/latest).
