@@ -1,0 +1,46 @@
+name: Publish shaaenFCT v0.7.28
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v0.7.28.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'NLshaen/ShaaenFCT'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out v0.7.28 source commit
+        uses: actions/checkout@v4
+        with:
+          ref: 27e302e7e898275b741e2cd96bed0d98ad172b55
+
+      - name: Build standalone addon archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staging/shaaenFCT
+          cp -R Core.lua Integration.lua shaaenFCT.toc README.txt Fonts Libs staging/shaaenFCT/
+          (cd staging && zip -qr "$GITHUB_WORKSPACE/shaaenFCT_0.7.28_settings_styles_ui.zip" shaaenFCT)
+          unzip -t shaaenFCT_0.7.28_settings_styles_ui.zip
+
+      - name: Publish tag and release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v0.7.28 --repo NLshaen/ShaaenFCT >/dev/null 2>&1; then
+            gh release upload v0.7.28 shaaenFCT_0.7.28_settings_styles_ui.zip --repo NLshaen/ShaaenFCT --clobber
+          else
+            gh release create v0.7.28 shaaenFCT_0.7.28_settings_styles_ui.zip \
+              --repo NLshaen/ShaaenFCT \
+              --target 27e302e7e898275b741e2cd96bed0d98ad172b55 \
+              --title "shaaenFCT v0.7.28" \
+              --notes "Settings UI refresh for WoW Forever: hover effects, window scale and opacity sliders, Settings tabs (General, Style, Fonts), five interface color themes, and /sfct ui reset. Combat, pet damage and Overkill behavior preserved." \
+              --latest
+          fi
