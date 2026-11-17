@@ -1,0 +1,11 @@
+SHAAEN FCT - LOCAL FONTS
+
+1. Copy your licensed TTF or OTF file into this Fonts folder.
+2. Edit CustomFonts.lua and uncomment/add an entry to localFonts:
+      {'My Font', 'MyFont.ttf'},
+3. Save the file and use /reload in WoW.
+4. Open /sfct > Typography and select the font.
+
+No third-party font binaries are bundled. You are responsible for using licensed fonts.
+If the full LibSharedMedia-3.0 is installed, custom font names are also registered there.
+This addon includes a fallback font-only media adapter for installations without LibSharedMedia.
