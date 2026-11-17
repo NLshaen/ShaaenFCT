@@ -1,10 +1,18 @@
-shaaenFCT 0.7.28 | WoW Forever (live version in menu footer)
+shaaenFCT 0.7.29 | WoW Forever (live version in menu footer)
 ===================================
 
 INSTALLATION
 1. Extract shaaenFCT into Interface/AddOns/.
 2. Make sure shaaenFCT contains shaaenFCT.toc and Core.lua.
 3. In game, type /reload and /sfct.
+
+TYPOGRAPHY COMPATIBILITY FIX (0.7.29)
+- Initialize normal and critical preview FontStrings with GameFontNormal,
+  and apply their selected fonts before calling SetText().
+- Prevent Fonts/Typography panel construction from failing on WoW Forever
+  with FontString:SetText(): Font not set.
+- Preserves normal/critical font selection, Settings, Overkill and all
+  existing damage and animation functionality.
 
 SETTINGS UI REFRESH (0.7.28)
 - A smooth hover highlight now animates when the pointer enters or leaves

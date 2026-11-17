@@ -1740,12 +1740,17 @@ local function createWindow()
  dropdown('uiFont','SETTINGS FONT   /   COMPACT UI',-533)
  -- Only a font registry/provider supplies third-party font data. This preview
  -- uses local sample numbers, never protected combat amounts.
- local normalPreview=typeface:CreateFontString(nil,'OVERLAY')
+ -- A FontString must receive a font before SetText() on WoW Forever.
+ -- Give both previews Blizzard's built-in fallback first, then apply the
+ -- selected font (setFont also handles unavailable SharedMedia paths).
+ local normalPreview=typeface:CreateFontString(nil,'OVERLAY','GameFontNormal')
  normalPreview:SetPoint('TOPLEFT',220,-606)
+ setFont(normalPreview,22,db.font)
  normalPreview:SetTextColor(1,1,1)
  normalPreview:SetText('12345')
- local critPreview=typeface:CreateFontString(nil,'OVERLAY')
+ local critPreview=typeface:CreateFontString(nil,'OVERLAY','GameFontNormal')
  critPreview:SetPoint('TOPLEFT',481,-606)
+ setFont(critPreview,26,db.critFont)
  critPreview:SetTextColor(1,.85,.15)
  critPreview:SetText('67890')
  refreshSamples=function()
