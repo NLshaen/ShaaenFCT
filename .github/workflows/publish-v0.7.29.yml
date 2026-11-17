@@ -31,19 +31,33 @@ jobs:
           (cd staging && zip -qr "$GITHUB_WORKSPACE/ShaaenFCT_v0.7.29.zip" shaaenFCT)
           unzip -t ShaaenFCT_v0.7.29.zip
 
-      - name: Publish GitHub Release
+      - name: Publish GitHub Release with formatted notes
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          cat > release-notes.md <<'NOTES'
+          ### Corrections
+          - Initialize the Typography / Fonts preview FontStrings before calling SetText().
+          - Prevent the WoW Forever error "FontString:SetText(): Font not set".
+          - Preserve selected fonts and Blizzard fallback for unavailable fonts.
+
+          ### Commit
+          - [3f9e717](https://github.com/NLshaen/ShaaenFCT/commit/3f9e71755a1bc0af810d9353db101c54fc202c96)
+
+          ### Installation
+          Replace shaaenFCT in Interface/AddOns, then type /reload.
+          NOTES
           if gh release view v0.7.29 --repo NLshaen/ShaaenFCT >/dev/null 2>&1; then
             gh release upload v0.7.29 ShaaenFCT_v0.7.29.zip --repo NLshaen/ShaaenFCT --clobber
+            gh release edit v0.7.29 --repo NLshaen/ShaaenFCT --title "ShaaenFCT_v0.7.29" --notes-file release-notes.md
           else
             gh release create v0.7.29 ShaaenFCT_v0.7.29.zip \
               --repo NLshaen/ShaaenFCT \
               --target 3f9e71755a1bc0af810d9353db101c54fc202c96 \
               --title "ShaaenFCT_v0.7.29" \
-              --notes "### Corrections\n- Initialisation des polices des aperçus Typography / Fonts avant SetText().\n- Prévention de l'erreur FontString:SetText(): Font not set sur WoW Forever.\n- Conservation des polices choisies et repli Blizzard pour les polices indisponibles.\n\nCommit : 3f9e71755a1bc0af810d9353db101c54fc202c96\n\n### Installation\nRemplacer le dossier shaaenFCT dans Interface/AddOns puis faire /reload." \
+              --notes-file release-notes.md \
               --latest
           fi
+          python3 .github/scripts/update_release_notes.py v0.7.29
