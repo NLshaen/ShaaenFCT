@@ -1,0 +1,49 @@
+name: Update Release changelog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-changelog.yml'
+      - '.github/scripts/update_release_notes.py'
+  release:
+    types: [published]
+  workflow_run:
+    workflows:
+      - Release
+      - Publish shaaenFCT v0.7.28
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-changelog
+  cancel-in-progress: false
+
+jobs:
+  update-changelog:
+    if: github.repository == 'NLshaen/ShaaenFCT' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out changelog generator
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Add feature, fix and commit links to GitHub Release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile .github/scripts/update_release_notes.py
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            python3 .github/scripts/update_release_notes.py "${RELEASE_TAG}"
+          else
+            python3 .github/scripts/update_release_notes.py
+          fi
