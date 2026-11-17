@@ -3,6 +3,7 @@
 Floating combat text addon for **WoW Forever**.
 
 Current version: **v0.7.28**.
+
 ## Installation
 
 Place the repository contents in `Interface/AddOns/shaaenFCT/`, then run `/reload` in game. Open the addon configuration with `/sfct`.
