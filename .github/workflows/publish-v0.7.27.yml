@@ -1,0 +1,42 @@
+name: Publish shaaenFCT v0.7.27
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v0.7.27.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'NLshaen/ShaaenFCT'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out v0.7.27 source commit
+        uses: actions/checkout@v4
+        with:
+          ref: f6eacc647146d0b1af39160e07722780dc528fed
+
+      - name: Build standalone addon archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staging/shaaenFCT
+          cp -R Core.lua Integration.lua shaaenFCT.toc README.txt Fonts Libs staging/shaaenFCT/
+          (cd staging && zip -qr "$GITHUB_WORKSPACE/shaaenFCT_0.7.27_blocked_damage_fix.zip" shaaenFCT)
+          unzip -t shaaenFCT_0.7.27_blocked_damage_fix.zip
+
+      - name: Create tag and GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create v0.7.27 shaaenFCT_0.7.27_blocked_damage_fix.zip \
+            --repo NLshaen/ShaaenFCT \
+            --target f6eacc647146d0b1af39160e07722780dc528fed \
+            --title "shaaenFCT v0.7.27" \
+            --notes "Version 0.7.27 pour WoW Forever. Correction de l'affichage des degats BLOCKED et conservation des animations, de l'Overkill, des coups erafles et des soins recus." \
+            --latest
