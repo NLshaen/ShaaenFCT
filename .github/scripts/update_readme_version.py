@@ -13,7 +13,7 @@ version = match.group(1)
 readme_path = root / "README.md"
 readme = readme_path.read_text(encoding="utf-8")
 updated, replacements = re.subn(
-    r"(?m)^Current (?:release|version):\s*\*\*v?\d+\.\d+\.\d+\*\*\.?\s*$",
+    r"(?m)^Current (?:release|version):[ \t]*\*\*v?\d+\.\d+\.\d+\*\*\.?[ \t]*$",
     f"Current version: **v{version}**.",
     readme,
     count=1,
