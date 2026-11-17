@@ -1,0 +1,50 @@
+name: Sync README version
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - shaaenFCT.toc
+      - .github/scripts/update_readme_version.py
+      - .github/workflows/sync-readme-version.yml
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-readme-version-main
+  cancel-in-progress: false
+
+jobs:
+  update-readme:
+    if: github.repository == 'NLshaen/ShaaenFCT'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+
+      - name: Synchronize README with TOC version
+        run: python3 .github/scripts/update_readme_version.py
+
+      - name: Commit only if README changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "README.md is already in sync"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: sync README version with shaaenFCT.toc"
+          git pull --rebase origin main
+          git push origin HEAD:main
