@@ -25,8 +25,8 @@ jobs:
           set -euo pipefail
           mkdir -p staging/shaaenFCT
           cp -R Core.lua Integration.lua shaaenFCT.toc README.txt Fonts Libs staging/shaaenFCT/
-          (cd staging && zip -qr "$GITHUB_WORKSPACE/shaaenFCT_0.7.27_blocked_damage_fix.zip" shaaenFCT)
-          unzip -t shaaenFCT_0.7.27_blocked_damage_fix.zip
+          (cd staging && zip -qr "$GITHUB_WORKSPACE/shaaenFCT_0.7.27.zip" shaaenFCT)
+          unzip -t shaaenFCT_0.7.27.zip
 
       - name: Create tag and GitHub Release
         shell: bash
