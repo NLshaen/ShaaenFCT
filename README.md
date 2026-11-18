@@ -2,7 +2,7 @@
 
 Floating combat text addon for **WoW Forever**.
 
-Current version: **v0.7.29**.
+Current version: **v0.7.30**.
 
 ## Installation
 
