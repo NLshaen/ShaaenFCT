@@ -1,10 +1,26 @@
-shaaenFCT 0.7.29 | WoW Forever (live version in menu footer)
+shaaenFCT 0.7.30 | WoW Forever (live version in menu footer)
 ===================================
 
 INSTALLATION
 1. Extract shaaenFCT into Interface/AddOns/.
 2. Make sure shaaenFCT contains shaaenFCT.toc and Core.lua.
 3. In game, type /reload and /sfct.
+
+OPTIONAL BLIZZARD COMBAT LOG FILTER (0.7.30)
+- Settings > General > USE SHAAENFCT FILTER creates/selects a named
+  ShaaenFCT preset in Blizzard's native Combat Log, outside combat only.
+- Slash command: /sfct log create (or /sfct log select).
+- Slash command: /sfct log status checks whether the preset is selected.
+- Preset displays own + pet melee, ranged and spell damage and missed hits,
+  including dodges/parries/blocks when the client formats them as misses.
+- Healing, buffs, debuffs and other irrelevant events are excluded to reduce
+  false Smart credits. The native combat log shows timestamps for readability.
+- Uses Blizzard's existing filter registry and selection mechanism when
+  present; if unavailable, use Blizzard's My Actions filter manually.
+- WoW Forever forbids addons from reading raw combat-log events. This is a
+  display filter, not a way to read forbidden/secret combat values.
+- Filter creation is OPT-IN: it never changes Blizzard filters on addon load.
+- All animation, overkill and font options from 0.7.29 are unchanged.
 
 TYPOGRAPHY COMPATIBILITY FIX (0.7.29)
 - Initialize normal and critical preview FontStrings with GameFontNormal,

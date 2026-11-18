@@ -1534,7 +1534,7 @@ local function createWindow()
  local choices={}
  local sourceNames={smart='SMART  /  PERSONAL DAMAGE',player='BLIZZARD  /  NATIVE DAMAGE',all='ALL DAMAGE  /  UNFILTERED'}
  local sourceDescriptions={
-  smart='My Actions combat-log filter + curved motion',
+  smart='ShaaenFCT / My Actions combat-log filter + curved motion',
   player='Accurate source filtering, native text only',
   all='Also displays damage from other players'
  }
@@ -1547,15 +1547,16 @@ local function createWindow()
  sourceChoice('smart',-297)
  sourceChoice('player',-352)
  sourceChoice('all',-407)
- label(general,'SMART: My Actions (Pet + Miss/Parry/Block). Own target / pet target only.',220,-464,11,.75,.79,.83)
- button(general,'OPEN COMBAT LOG',220,-489,229,34,function()
-  if InCombatLockdown and InCombatLockdown() then say('Open the Combat Log outside combat.');return end
-  local log=_G.COMBATLOG
-  if log and type(FCF_SelectDockFrame)=='function' then
-   local ok=pcall(FCF_SelectDockFrame,log)
-   if ok then enableFilteredLog();say('Select the My Actions filter, then return to chat.');return end
-  end
-  say('Open Combat Log and select My Actions.')
+ label(general,'SMART: ShaaenFCT filter / My Actions fallback (own and pet hits).',220,-464,11,.75,.79,.83)
+ button(general,'USE SHAAENFCT FILTER',220,-489,229,34,function()
+  if InCombatLockdown and InCombatLockdown() then say('Use the filter outside combat.');return end
+  local filter=_G.ShaaenFCTCombatFilter
+  if not filter or type(filter.Activate)~='function' then say('Combat filter module unavailable.');return end
+  local ok,success,result=pcall(filter.Activate,filter)
+  if not ok or not success then say(result or 'Blizzard filter unavailable; use My Actions.');return end
+  setSource('smart')
+  enableFilteredLog()
+  say(result)
  end,true)
  -- Let Smart match filtered log messages on the OWN pet's current target;
  -- never infer pet hits just because a unit took damage.
@@ -2123,7 +2124,7 @@ local function createWindow()
  section(help,'QUICK START',-178)
  label(help,'1. Open Settings > General and select SMART.',220,-209,12)
  label(help,'2. Open the Blizzard Combat Log.',220,-237,12)
- label(help,'3. Select My Actions and include Pet in its filter.',220,-265,12)
+ label(help,'3. Click USE SHAAENFCT FILTER (or select My Actions).',220,-265,12)
  label(help,'4. Attack a target with a visible nameplate.',220,-293,12)
  section(help,'SLASH COMMANDS',-347)
  label(help,'/sfct                 Open / close settings',220,-377,12)
@@ -2133,7 +2134,7 @@ local function createWindow()
  label(help,'/sfct source all      Unfiltered damage',220,-489,12)
  label(help,'/sfct status          Compact status',220,-517,12)
  label(help,'/sfct minimap show | hide | reset',220,-545,12)
- label(help,'/sfct pet on | off    Own pet target filter',220,-573,12)
+ label(help,'/sfct log create      Create/select ShaaenFCT log filter',220,-573,11)
  label(help,'/sfct ui reset          Restore scale and opacity to 100%.',220,-602,11,.69,.73,.77)
  -- Persistent action bar: buttons remain at the bottom-right while resizing.
  local footerLine=fixedTexture(w,'BOTTOMLEFT',207,56,506,1,.25,.28,.33,.85)
@@ -2370,6 +2371,19 @@ SLASH_SHAAENFCT2='/shaaenfct'
 SlashCmdList.SHAAENFCT=function(msg)
  if not db then say('Addon not initialized.');return end
  msg=(msg or ''):lower():match('^%s*(.-)%s*$')
+ if msg=='log create' or msg=='log select' or msg=='log' then
+  local filter=_G.ShaaenFCTCombatFilter
+  if not filter then say('Blizzard Combat Log filter module missing.');return end
+  local ok,created,message=pcall(filter.Activate,filter)
+  if not ok or not created then say(message or 'Unable to create/select filter. Use My Actions.');return end
+  setSource('smart');enableFilteredLog();say(message);return
+ end
+ if msg=='log status' then
+  local filter=_G.ShaaenFCTCombatFilter
+  if not filter then say('Blizzard Combat Log filter module missing.');return end
+  local ok,_,message=pcall(filter.Status,filter)
+  say(ok and message or 'Blizzard Combat Log is not ready.');return
+ end
  if msg=='source smart' or msg=='source experimental' then setSource('smart');say('SMART source / make sure the Combat Log filter is My Actions');return end
  if msg=='source player' or msg=='source moi' then setSource('player');say('Blizzard source: your damage only');return end
  if msg=='source all' or msg=='source tous' then setSource('all');say('Addon source: all damage (including other players)');return end
