@@ -3,14 +3,21 @@ name: Publish to CurseForge
 on:
   release:
     types: [published]
-  # GitHub Releases created with GITHUB_TOKEN do not trigger release workflows.
-  # Chaining after our release changelog job covers our automatic publisher.
+  # Releases created with GITHUB_TOKEN do not emit further release events.
+  # workflow_run handles known automatic publishers; schedule is a fallback.
   workflow_run:
     workflows:
       - Update Release changelog
       - Release
       - Publish shaaenFCT v0.7.28
+      - Publish ShaaenFCT v0.7.29
+      - Publish ShaaenFCT v0.7.30
+      - Publish ShaaenFCT
     types: [completed]
+  # Catch releases from future publisher workflows (including GITHUB_TOKEN).
+  # GitHub schedules can be delayed, so this is a backup, not a precise timer.
+  schedule:
+    - cron: '9,24,39,54 * * * *'
   workflow_dispatch:
     inputs:
       tag:
@@ -51,4 +58,15 @@ jobs:
           CURSEFORGE_GAME_VERSION_IDS: ${{ vars.CURSEFORGE_GAME_VERSION_IDS }}
           CURSEFORGE_RELEASE_TYPE: ${{ vars.CURSEFORGE_RELEASE_TYPE }}
           RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
-        run: python3 .github/scripts/upload_curseforge.py
+          WORKFLOW_RUN_NAME: ${{ github.event.workflow_run.name }}
+          # Do not automatically publish older releases when adding this workflow.
+          RELEASE_MAX_AGE_HOURS: ${{ github.event_name == 'schedule' && '2' || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # For version-specific publishers, publish that exact release even
+          # when multiple releases were created in quick succession.
+          if [[ -z "${RELEASE_TAG}" && "${WORKFLOW_RUN_NAME}" =~ ^[Pp]ublish[[:space:]]+[Ss]haaenFCT[[:space:]]+(v[0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            export RELEASE_TAG="${BASH_REMATCH[1]}"
+          fi
+          python3 .github/scripts/upload_curseforge.py

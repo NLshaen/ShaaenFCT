@@ -12,6 +12,7 @@ its marker is uploaded still require manual checking on CurseForge.
 """
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import subprocess
@@ -99,6 +100,22 @@ def main():
     if release.get("draft") or release.get("prerelease"):
         print(f"Skipping draft or prerelease {tag}")
         return
+
+    # Scheduled fallback only processes newly published releases, not older
+    # unmarked releases that predate enabling the automatic workflow.
+    max_age_value = os.environ.get("RELEASE_MAX_AGE_HOURS", "").strip()
+    if max_age_value:
+        if not max_age_value.isdigit() or int(max_age_value) <= 0:
+            raise ValueError("RELEASE_MAX_AGE_HOURS must be a positive integer")
+        published_at = release.get("published_at")
+        if not published_at:
+            raise ValueError("GitHub Release has no published_at timestamp")
+        published = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+        age_seconds = (datetime.now(timezone.utc) - published).total_seconds()
+        if age_seconds > int(max_age_value) * 3600:
+            print(f"Skipping old GitHub Release {tag} (published more than "
+                  f"{max_age_value} hours ago)")
+            return
 
     marker_name = f"CurseForge_{tag}.json"
     if any(a["name"] == marker_name for a in release.get("assets", [])):
