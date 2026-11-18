@@ -1,0 +1,74 @@
+name: Publish ShaaenFCT
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v0.7.45.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-v0745:
+    if: github.repository == 'NLshaen/ShaaenFCT'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v0.7.45 source
+        uses: actions/checkout@v4
+        with:
+          ref: 59a6c2df5f0e4e394a0aded67a52f24f9f961ff7
+
+      - name: Build and verify ShaaenFCT_v0.7.45.zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^## Version: 0.7.45$' shaaenFCT.toc
+          grep -q '^NameplateDisplay.lua$' shaaenFCT.toc
+          grep -q '^PlayerDisplay.lua$' shaaenFCT.toc
+          mkdir -p staging/shaaenFCT
+          cp -R Core.lua Integration.lua NameplateDisplay.lua PlayerDisplay.lua shaaenFCT.toc README.txt Fonts Libs staging/shaaenFCT/
+          (cd staging && zip -qr "$GITHUB_WORKSPACE/ShaaenFCT_v0.7.45.zip" shaaenFCT)
+          unzip -t ShaaenFCT_v0.7.45.zip
+          test "$(unzip -Z1 ShaaenFCT_v0.7.45.zip | grep -v '/$' | wc -l)" -eq 9
+
+      - name: Publish the GitHub tag, release and changelog
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'NOTES'
+          ## Ajouts
+          - Affichage des dégâts mêlée, sorts et DoT dans des frames indépendantes attachées aux nameplates.
+          - Mode Coverage pour les cibles suivies, incluant les dégâts de zone disponibles.
+          - Deux frames attachées au joueur : soins en vert et gains d'XP en violet.
+          - Sliders Scale et Opacity alignés dans la top bar, aperçu des animations et fenêtre recentrée via la minimap.
+
+          ## Corrections
+          - Correction de l'ouverture de la configuration depuis l'icône de minimap, notamment après une opacité de 0 %.
+          - Correction de l'erreur WoW Forever : `function has more than 60 upvalues` dans `Core.lua`, grâce à l'extraction des gestionnaires de nameplates.
+          - Stabilisation du recyclage et de l'ancrage des frames de nameplates.
+
+          ## Compatibilité
+          - Version WoW Forever (Interface 16001).
+          - L'attribution de certains dégâts dans le mode Coverage peut être approximative sur ce client ; aucun montant protégé n'est interprété ou inventé.
+
+          ## Installation
+          Extraire le dossier `shaaenFCT` dans `Interface/AddOns/`, puis taper `/reload`.
+          NOTES
+
+          if gh release view v0.7.45 --repo NLshaen/ShaaenFCT >/dev/null 2>&1; then
+            gh release upload v0.7.45 ShaaenFCT_v0.7.45.zip --repo NLshaen/ShaaenFCT --clobber
+            gh release edit v0.7.45 --repo NLshaen/ShaaenFCT --title "ShaaenFCT_v0.7.45" --notes-file release-notes.md --latest
+          else
+            gh release create v0.7.45 ShaaenFCT_v0.7.45.zip \
+              --repo NLshaen/ShaaenFCT \
+              --target 59a6c2df5f0e4e394a0aded67a52f24f9f961ff7 \
+              --title "ShaaenFCT_v0.7.45" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+          python3 .github/scripts/update_release_notes.py v0.7.45
