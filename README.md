@@ -2,25 +2,27 @@
 
 Floating combat text addon for **WoW Forever**.
 
-Current version: **v0.7.30**.
+Current version: **v0.7.45**.
 
 ## Installation
 
-Place the repository contents in `Interface/AddOns/shaaenFCT/`, then run `/reload` in game. Open the addon configuration with `/sfct`.
+Download [ShaaenFCT_v0.7.45.zip](https://github.com/NLshaen/ShaaenFCT/releases/download/v0.7.45/ShaaenFCT_v0.7.45.zip), extract the `shaaenFCT` folder into `Interface/AddOns/`, then run `/reload` in game. Open the addon settings with `/sfct` or the minimap icon.
 
 ## Features
 
-- Animated combat text on enemy nameplates (Arc, Popup, Float and Bounce)
-- Smart combat-log filtering for player and pet actions
-- MISS, DODGE, PARRY, BLOCK and GLANCING feedback
-- Green incoming healing text
-- Final-hit / Overkill effect with a configurable shake
-- Custom font support and a resizable configuration window
+- Damage numbers on independent frames anchored to enemy nameplates, with Arc, Popup, Float and Bounce animations
+- **Coverage** mode for available melee, spell, DoT and area-damage reports on tracked nameplates
+- Green incoming-heal numbers in a dedicated frame attached to the player
+- Purple experience-gain numbers in a separate player frame
+- MISS, DODGE, PARRY, BLOCK and GLANCING feedback, plus configurable Overkill effects
+- Custom fonts and interface themes, window scale (75–120%) and opacity controls
+- Minimap icon opens the configuration window in the screen center
+- v0.7.45 fixes WoW Forever's 60-upvalue limit by splitting the nameplate event handlers
 
-See [`README.txt`](README.txt) for version-specific instructions and known client limitations.
+## Limitations
 
-## Notes
+WoW Forever may restrict combat values and event attribution. **Coverage is best-effort in solo play** for unconfirmed source events; an observed damage event is not proof that the player caused it. For details and commands, see [README.txt](README.txt).
 
-In Smart mode, configure the game's Combat Log with **My Actions**, including pet and miss/block events. WoW Forever's `UNIT_COMBAT` events may not identify the source of damage.
+## Releases
 
-Download the latest addon package from [GitHub Releases](https://github.com/NLshaen/ShaaenFCT/releases/latest).
+Download the latest package from [GitHub Releases](https://github.com/NLshaen/ShaaenFCT/releases/latest).

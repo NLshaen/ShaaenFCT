@@ -17,6 +17,21 @@ local function runCommand(command)
  end
 end
 
+-- The minimap must open settings directly: slash commands can be wrapped
+-- by another addon, and a persisted 0% window opacity makes :Show() invisible.
+local function openSettingsFromMinimap()
+ local fn=_G.ShaaenFCTOpenSettings
+ if type(fn)=='function' then
+  local ok,success,reason=pcall(fn)
+  if ok and success then return end
+  if DEFAULT_CHAT_FRAME then
+   DEFAULT_CHAT_FRAME:AddMessage('|cffffa447shaaenFCT|r  Minimap settings error: '..tostring(ok and reason or success))
+  end
+ end
+ -- Keep the normal slash command as fallback for unusual load orders.
+ runCommand('open center')
+end
+
 local function whiteTexture(frame,r,g,b,a)
  local tx=frame:CreateTexture(nil,'BACKGROUND')
  tx:SetAllPoints(frame)
@@ -80,7 +95,7 @@ end
 -- same commands. Each entry goes through the existing /sfct handler.
 local menuActions={
  {'OPEN SETTINGS','open'},
- {'SMART  /  MY DAMAGE','source smart'},
+ {'COVERAGE  /  ALL MY DAMAGE','source coverage'},
  {'BLIZZARD  /  NATIVE','source player'},
  {'ALL DAMAGE','source all'},
  {'ENABLE ADDON','on'},
@@ -130,7 +145,7 @@ local function showTooltip(self)
  GameTooltip:AddLine('Left-click: Open settings',.8,.82,.85)
  GameTooltip:AddLine('Right-click: Quick slash commands',.8,.82,.85)
  GameTooltip:AddLine('Drag: Move the minimap icon',.8,.82,.85)
- GameTooltip:AddLine('/sfct  |  /sfct source smart',.96,.65,.36)
+ GameTooltip:AddLine('/sfct  |  /sfct source coverage',.96,.65,.36)
  GameTooltip:AddLine('/sfct minimap hide  |  reset',.72,.77,.83)
  GameTooltip:Show()
 end
@@ -195,7 +210,7 @@ local function createMinimapButton()
    end
   else
    if quickMenu then quickMenu:Hide() end
-   runCommand('open')
+   openSettingsFromMinimap()
   end
  end)
  b:SetScript('OnDragStart',function(self)
@@ -234,10 +249,10 @@ local function registerGameOptions()
  subtitle:SetPoint('TOPLEFT',20,-60)
  local info=label(p,'Open the full addon window to customize fonts and animations.',12,.87,.90,.94)
  info:SetPoint('TOPLEFT',20,-105)
- local note=label(p,'Smart mode needs the Blizzard Combat Log filter: My Actions.',12,.72,.77,.84)
+ local note=label(p,'Coverage includes melee, spells, DoT, heals and XP frames.',12,.72,.77,.84)
  note:SetPoint('TOPLEFT',20,-132)
  gameButton(p,'OPEN SHAAEN FCT SETTINGS',-180,function() runCommand('open') end)
- gameButton(p,'SMART MODE  /  MY DAMAGE',-224,function() runCommand('source smart') end)
+ gameButton(p,'COVERAGE  /  MELEE + SPELL + DOT',-224,function() runCommand('source coverage') end)
  gameButton(p,'BLIZZARD  /  NATIVE DAMAGE',-268,function() runCommand('source player') end)
  gameButton(p,'ALL DAMAGE  /  UNFILTERED',-312,function() runCommand('source all') end)
  local mini=gameButton(p,'',-366,function()
@@ -251,7 +266,7 @@ local function registerGameOptions()
   end
  end
  p.refresh()
- local tip=label(p,'Commands: /sfct  ·  /sfct source smart  ·  /sfct minimap reset',11,.67,.73,.79)
+ local tip=label(p,'Commands: /sfct  ·  /sfct source coverage  ·  /sfct minimap reset',11,.67,.73,.79)
  tip:SetPoint('TOPLEFT',20,-433)
  local registered=false
  if Settings and type(Settings.RegisterCanvasLayoutCategory)=='function' and type(Settings.RegisterAddOnCategory)=='function' then
@@ -282,7 +297,7 @@ if type(baseSlash)=='function' then
   elseif key=='minimap reset' then resetMinimap();return
   elseif key=='help' then
    if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage('|cffffa447shaaenFCT|r /sfct (settings), /sfct source smart|player|all, /sfct on|off, /sfct status, /sfct minimap show|hide|reset')
+    DEFAULT_CHAT_FRAME:AddMessage('|cffffa447shaaenFCT|r /sfct (settings), /sfct source coverage|player|all, /sfct on|off, /sfct status, /sfct minimap show|hide|reset')
    end
    return
   end

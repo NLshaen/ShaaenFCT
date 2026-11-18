@@ -1,26 +1,31 @@
-shaaenFCT 0.7.30 | WoW Forever (live version in menu footer)
+shaaenFCT 0.7.45 | WoW Forever (live version in menu footer)
 ===================================
+
+
+HISTORICAL VERSION NOTES (0.7.40 and earlier)
+The sections below describe previous versions, including the removed Smart mode.
+Current versions offer COVERAGE, BLIZZARD PLAYER and ALL.
+
+NAMEPLATE DISPLAY EXPERIMENT (0.7.40, based on stable 0.7.29)
+- Inspired by the separation of event presentation and animation frames in
+  Mik's Scrolling Battle Text (VadimTofan/MiksScrollingBattleText). This is
+  original ShaaenFCT implementation; no MSBT source code is included.
+- Create an independent HIGH-level anchor frame for each visible nameplate.
+  Text is parented to that frame, not Blizzard's nameplate, so its alpha and
+  clipping do not hide the combat numbers. The anchor follows the nameplate
+  automatically and does not need protected screen coordinates.
+- When Blizzard removes/reuses a plate, stop following that plate. Existing
+  hits continue only if a readable last position was cached.
+- The v0.7.29 event filtering, Smart mode, pet matching, critical hits,
+  healing, four animations, and Final Hit settings are unchanged.
+- Commands: /sfct plate on, /sfct plate off, /sfct plate preview,
+  /sfct plate status, /sfct status. Default: plate on.
+- This is a local test build; not a GitHub Release.
 
 INSTALLATION
 1. Extract shaaenFCT into Interface/AddOns/.
 2. Make sure shaaenFCT contains shaaenFCT.toc and Core.lua.
 3. In game, type /reload and /sfct.
-
-OPTIONAL BLIZZARD COMBAT LOG FILTER (0.7.30)
-- Settings > General > USE SHAAENFCT FILTER creates/selects a named
-  ShaaenFCT preset in Blizzard's native Combat Log, outside combat only.
-- Slash command: /sfct log create (or /sfct log select).
-- Slash command: /sfct log status checks whether the preset is selected.
-- Preset displays own + pet melee, ranged and spell damage and missed hits,
-  including dodges/parries/blocks when the client formats them as misses.
-- Healing, buffs, debuffs and other irrelevant events are excluded to reduce
-  false Smart credits. The native combat log shows timestamps for readability.
-- Uses Blizzard's existing filter registry and selection mechanism when
-  present; if unavailable, use Blizzard's My Actions filter manually.
-- WoW Forever forbids addons from reading raw combat-log events. This is a
-  display filter, not a way to read forbidden/secret combat values.
-- Filter creation is OPT-IN: it never changes Blizzard filters on addon load.
-- All animation, overkill and font options from 0.7.29 are unchanged.
 
 TYPOGRAPHY COMPATIBILITY FIX (0.7.29)
 - Initialize normal and critical preview FontStrings with GameFontNormal,
@@ -33,7 +38,7 @@ TYPOGRAPHY COMPATIBILITY FIX (0.7.29)
 SETTINGS UI REFRESH (0.7.28)
 - A smooth hover highlight now animates when the pointer enters or leaves
   sidebar entries, Settings sub-tabs and standard addon option buttons.
-- The top bar has two live sliders: WINDOW SCALE (70-130%, default 100%) and
+- The top bar originally had WINDOW SCALE (70-130%, default 100%) and
   OPACITY (0-100%, default 100%). Both persist in shaaenFCTDB.
 - WARNING: 0% opacity hides the window. Type /sfct ui reset (or
   /sfct windowreset) to restore both sliders to 100% without reloading.
@@ -80,9 +85,9 @@ INCOMING HEALS (0.7.25)
 - Native mode remains Blizzard-managed to avoid duplicating its own healing text.
 - PARRY is off-white; BLOCK is gray. MISS and DODGE retain their colors.
 
-SMART DAMAGE FILTER
+HISTORICAL SMART DAMAGE FILTER (REMOVED IN 0.7.42)
 - Open the Blizzard Combat Log and choose the "My Actions" filter.
-- Use /sfct source smart (default on new installs).
+- Use /sfct source coverage (previously /sfct source smart) (default on new installs).
 - Smart matches filtered log messages to UNIT_COMBAT nameplate events by
   timing, ONLY for your selected enemy or your own pet's current target.
 - MISS, DODGE, PARRY and BLOCK notices use the normal nameplate animation styles.
@@ -170,7 +175,7 @@ ENGLISH SETTINGS / SEARCHABLE TYPOGRAPHY / LIVE VERSIONS
 
 COMMANDS
 /sfct                      Open or close settings
-/sfct source smart         Filtered personal nameplate damage
+/sfct source coverage (previously /sfct source smart)         Filtered personal nameplate damage
 /sfct pet on | off          Include own pet target for Smart matching
 /sfct source player        Blizzard native personal damage
 /sfct source all           All nameplate damage, including other players
@@ -373,3 +378,63 @@ TYPOGRAPHY FONT PICKER (0.7.11)
 - Outcomes do not update the last damage amount or produce Overkill effects.
 - Includes both PARRY/PARRIED and BLOCK/BLOCKED event aliases.
 - No changes to the pet filter or the UI/overkill configuration.
+
+
+COVERAGE MODE (0.7.41) — MELEE, SPELL AND DoT NUMBERS IN NAMEPLATE FRAMES
+----------------------------------------------------------------------------
+Use /sfct source coverage (automatically activates the independent nameplate
+renderer), then /sfct plate on and /sfct plate traffic for category totals.
+- Uses the v0.7.29 combat engine and the v0.7.40 independent nameplate frames.
+- Matches personal combat-log credits first. If no credit matches, also shows
+  available UNIT_COMBAT WOUND/DAMAGE reports on the player's current target
+  and targets tracked when the player cast a spell or swung a weapon, for 35s.
+  A brief 0.65-second post-spell window also tracks newly damaged nameplates
+  for area-of-effect spells and subsequent DoT ticks.
+  Thus periodic DoT ticks on a previously targeted enemy can appear after a
+  target switch, provided the unit remains represented by a nameplate.
+- The solo fallback is disabled while grouped to avoid claiming other party
+  members' attacks. In solo, other players attacking the same enemy can still
+  cause ambiguous damage: this cannot be resolved with victim-only events.
+- WoW Forever may protect damage amounts and does not reveal the attacker's
+  identity or DoT spell in UNIT_COMBAT. Zero amounts that are readable are
+  dropped; protected values cannot safely be inspected or classified.
+- 'Physical' and 'magical' traffic counts are based on readable school data.
+  The addon cannot categorically identify DoT tick vs direct spell per hit.
+- Different nameplate tokens are separated; target alias reports are
+  de-duplicated to avoid doubling the same hit.
+- Revert to old reliable behavior using /sfct source coverage (previously /sfct source smart), or to Blizzard
+  combat numbers using /sfct source player.
+- Debug: /sfct plate status, /sfct plate traffic, /sfct status.
+
+
+RELEASE 0.7.43 - VIOLET EXPERIENCE
+- XP gains (+N XP) now display in violet (#B86EFF) in the separate player-attached XP frame.
+- Incoming healing remains green; damage and animation settings are unchanged.
+- Preview /sfct player preview also shows violet XP.
+
+RELEASE 0.7.42 - SETTINGS AND PLAYER NOTIFICATIONS
+- Topbar WINDOW SCALE slider: 75-120%, fixed interactive control layer.
+- Topbar WINDOW SCALE and OPACITY remain on one horizontal row when resizing.
+- Smart is no longer selectable: older Smart settings migrate to Coverage.
+- Coverage incoming HEAL: green numbers on a separate player-attached overlay frame.
+- Coverage XP: green +N XP text on its own player-attached overlay using
+  PLAYER_XP_UPDATE and readable UnitXP delta; the first snapshot is silent.
+- Style preview now appears above animation style tabs, which are below it.
+- Left-click minimap icon opens/recenters the addon settings.
+- Player preview: /sfct player preview. Enemies: /sfct plate preview.
+- Native and ALL modes remain available; no change to secret combat amounts.
+
+MINIMAP OPEN RECOVERY (0.7.44)
+- Left-click the minimap icon to open and recenter the settings window.
+- If the saved opacity is below 10%, it is restored to 100% so the window is visible.
+- The minimap launcher calls the settings window directly, with a slash-command fallback and error reporting.
+- Partially constructed windows are not cached if UI setup fails.
+- All Coverage, nameplate, healing and violet XP functions are unchanged.
+
+LUA UPVALUES FIX (0.7.45)
+- Fixed a WoW Forever Lua load error: the Core.lua OnEvent callback exceeded
+  the client's 60-upvalue limit (previously 67).
+- Nameplate-added and nameplate-removed processing now use dedicated local
+  functions; their behavior and the combat routing are unchanged.
+- Retains the v0.7.44 minimap-center/open recovery, violet XP notifications,
+  green heals and Coverage damage frames.

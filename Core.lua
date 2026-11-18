@@ -53,6 +53,13 @@ local fxLayer=CreateFrame('Frame',nil,UIParent)
 fxLayer:SetAllPoints(UIParent)
 fxLayer:SetFrameStrata('HIGH')
 fxLayer:SetFrameLevel(200)
+local plateDisplay=_G.ShaaenFCTPlateDisplay
+if plateDisplay then plateDisplay:Configure(fxLayer) end
+local playerDisplay=_G.ShaaenFCTPlayerDisplay
+if playerDisplay then playerDisplay:Configure(fxLayer) end
+local playerTextStats={heals=0,xp=0,ignored=0}
+local xpPrevious,xpPreviousMax
+local plateRenderStats={anchored=0,fallback=0,preview=0}
 -- Incoming heals use the same overlay so the player's unit frame is never
 -- moved or clipped by the text animation. The heal text has its own anchor.
 local overkills={}
@@ -60,6 +67,19 @@ local platePositions=setmetatable({}, {__mode='k'})
 local killDecorated=setmetatable({}, {__mode='k'})
 local plateCacheTick=0
 local smartCredits, smartPending = {}, {}
+-- Coverage mode keeps a time-bounded list of enemies we have targeted when
+-- casting or swinging. Unit combat reports describe the VICTIM, not the
+-- attacker, so uncertain hits may only be displayed in solo play.
+local coverageTargets=setmetatable({}, {__mode='k'})
+local coveragePlateEvents=setmetatable({}, {__mode='k'})
+local coverageStats={physical=0,magical=0,unknown=0,credited=0,soloFallback=0,
+ targetAlias=0,aliasSkipped=0,zeroSuppressed=0,unverified=0,tracked=0}
+local COVERAGE_TARGET_LIFETIME=35
+local COVERAGE_ALIAS_WINDOW=.11
+local COVERAGE_CAST_SPREAD=.65
+local coverageCastUntil=0
+local coverageCastAt=0
+local coverageCastPlates=setmetatable({}, {__mode='k'})
 -- A removed nameplate remains usable as a visual anchor for a short time.
 -- This improves late killing-hit delivery without inventing secret damage values.
 local recentPlates, pendingKills, plateGuids = {}, {}, {}
@@ -104,7 +124,7 @@ local baseFonts = {
  Skurri='Fonts\\SKURRI.TTF',
 }
 local defaults = {
- enabled=true, discordInvite='', damageSource='smart', petAssist=true, showKillingBlow=true, overkillDuration=1.35, overkillShakeIntensity='medium', font=defaultFont, critFont=defaultFont, uiFont=defaultUIFont,
+ enabled=true, plateDisplayEnabled=true, discordInvite='', damageSource='coverage', petAssist=true, showKillingBlow=true, overkillDuration=1.35, overkillShakeIntensity='medium', font=defaultFont, critFont=defaultFont, uiFont=defaultUIFont,
  uiColorStyle='ember', settingsSection='general', windowScale=100, windowOpacity=100,
  outline=true, size=27, critScale=1.5, duration=.9, startY=22,
  rise=65, arc=65, curve=40, fade=55, direction='alternate', animationStyle='arc',
@@ -328,9 +348,15 @@ local function clearNumbers()
   active[i]=nil
  end
  clearOverkills()
+ if plateDisplay then plateDisplay:Clear() end
 end
 local function clearQueues()
  smartCredits,smartPending={},{}
+ coverageTargets=setmetatable({}, {__mode='k'})
+ coveragePlateEvents=setmetatable({}, {__mode='k'})
+ coverageCastUntil=0
+ coverageCastAt=0
+ coverageCastPlates=setmetatable({}, {__mode='k'})
  pendingKills={}
  unresolvedKillSignals={}
  foreignKillPlates=setmetatable({}, {__mode='k'})
@@ -363,11 +389,12 @@ local function enableFilteredLog()
  end
 end
 local function setSource(source)
- if source~='smart' and source~='player' and source~='all' then return end
+ if source~='coverage' and source~='player' and source~='all' then return end
  db.damageSource=source
+ if source=='coverage' then db.plateDisplayEnabled=true end
  clearNumbers();clearQueues()
  if db.enabled and source=='player' then enableNative() else disableNative() end
- if source=='smart' then enableFilteredLog() end
+ if source=='coverage' then enableFilteredLog() end
 end
 -- Do not read, compare, stringify or calculate with protected combat amounts.
 -- Only unrelated UI coordinates and unit IDs are inspected when safely readable.
@@ -413,6 +440,86 @@ local function isPersonalTarget(unit,plate)
  end
  return false,false
 end
+-- Nameplate alias resolution never reads secret damage data. It only maps
+-- the familiar `target` token to an existing nameplate frame.
+local function livePlateForUnit(unit)
+ if C_NamePlate and type(C_NamePlate.GetNamePlateForUnit)=='function' then
+  local ok,plate=pcall(C_NamePlate.GetNamePlateForUnit,unit)
+  if ok and plate then return plate end
+ end
+ local guid=safeGUID(unit)
+ for token,plate in pairs(plates) do
+  if type(UnitIsUnit)=='function' then
+   local ok,same=pcall(UnitIsUnit,token,unit)
+   if ok and safeValue(same) and same==true then return plate end
+  end
+  if guid and (plateGuids[token]==guid or safeGUID(token)==guid) then return plate end
+ end
+end
+local function coverageIsSolo()
+ if type(IsInGroup)=='function' then
+  local ok,grouped=pcall(IsInGroup)
+  if not ok or not safeValue(grouped) then return false end
+  if grouped then return false end
+ end
+ if type(IsInRaid)=='function' then
+  local ok,raid=pcall(IsInRaid)
+  if not ok or not safeValue(raid) then return false end
+  if raid then return false end
+ end
+ return true
+end
+local function coverageTrack(unit,spellCast)
+ if not db or db.damageSource~='coverage' or not safeValue(unit) or type(unit)~='string' then return end
+ if spellCast then
+  coverageCastAt=GetTime()
+  coverageCastUntil=coverageCastAt+COVERAGE_CAST_SPREAD
+  coverageCastPlates=setmetatable({}, {__mode='k'})
+  -- Snapshot the nameplates present at cast time; a newly recycled unit
+  -- must not inherit this short AoE attribution window.
+  for _,candidate in pairs(plates) do coverageCastPlates[candidate]=true end
+ end
+ local plate=livePlateForUnit(unit)
+ if not plate then return end
+ coverageTargets[plate]=GetTime()+COVERAGE_TARGET_LIFETIME
+ coverageStats.tracked=coverageStats.tracked+1
+end
+local function coverageOwnTarget(unit,plate)
+ local authorized=isPersonalTarget(unit,plate)
+ if authorized then return true end
+ local now=GetTime()
+ local expires=coverageTargets[plate]
+ if expires~=nil and expires>=now then return true end
+ -- A spell can hit multiple nameplates at once. A very short, post-cast
+ -- window allows the first impact on each extra enemy to establish tracking
+ -- for subsequent DoT ticks. This is a solo-only visual fallback, not proof
+ -- of personal ownership of victim-only UNIT_COMBAT events.
+ if now<=coverageCastUntil and coverageCastPlates[plate] and unit:match('^nameplate%d+$') then
+  if type(UnitCanAttack)=='function' then
+   local ok,hostile=pcall(UnitCanAttack,'player',unit)
+   if ok and safeValue(hostile) and hostile==false then return false end
+  end
+  coverageTargets[plate]=now+COVERAGE_TARGET_LIFETIME
+  coverageStats.tracked=coverageStats.tracked+1
+  return true
+ end
+ return false
+end
+local function coverageKind(school,notice)
+ if notice then return 'unknown' end
+ if safeValue(school) and type(school)=='number' then
+  if school==1 then return 'physical' end
+  if school>1 then return 'magical' end
+ end
+ return 'unknown'
+end
+local function coverageRecord(kind)
+ coverageStats[kind]=(coverageStats[kind] or 0)+1
+end
+local function coverageAliasDuplicate(plate,action,now)
+ local seen=coveragePlateEvents[plate]
+ return seen and now-seen.at<=COVERAGE_ALIAS_WINDOW and seen.action==action
+end
 local function safeDead(unit)
  if type(UnitIsDead)~='function' then return false end
  local ok,dead=pcall(UnitIsDead,unit)
@@ -451,8 +558,15 @@ local function recentForPlate(plate)
  end
 end
 local function anchorNumber(fs,hit,x,y)
- if hit.position then fs:SetPoint('CENTER',UIParent,'BOTTOMLEFT',hit.position.x+x,hit.position.y+y)
- else fs:SetPoint('CENTER',hit.plate,'TOP',x,y) end
+ if hit.detached and hit.position then
+  fs:SetPoint('CENTER',fxLayer,'BOTTOMLEFT',hit.position.x+x,hit.position.y+y)
+ elseif hit.anchor then
+  fs:SetPoint('CENTER',hit.anchor,'CENTER',x,y)
+ elseif hit.position then
+  fs:SetPoint('CENTER',UIParent,'BOTTOMLEFT',hit.position.x+x,hit.position.y+y)
+ else
+  fs:SetPoint('CENTER',hit.plate,'TOP',x,y)
+ end
 end
 -- All trajectory arithmetic uses user configuration and elapsed time only.
 -- Protected damage values never enter this function.
@@ -554,13 +668,23 @@ end
 local function detachNumbers(plate,position)
  for _,hit in ipairs(active) do
   if hit.plate==plate and not hit.detached then
-   hit.position=position or platePositions[plate] or hit.position
+   local lastPosition=position or platePositions[plate] or hit.position
    hit.detached=true
-   hit.fs:SetParent(fxLayer)
-   hit.fs:ClearAllPoints()
-   local p=math.min(1,hit.t/math.max(.1,hit.duration))
-   local x,y=motionAt(hit,p)
-   anchorNumber(hit.fs,hit,x,y)
+   hit.anchor=nil
+   if lastPosition then
+    hit.position=lastPosition
+    hit.fs:SetParent(fxLayer)
+    hit.fs:ClearAllPoints()
+    local p=math.min(1,hit.t/math.max(.1,hit.duration))
+    local x,y=motionAt(hit,p)
+    anchorNumber(hit.fs,hit,x,y)
+   else
+    -- Never let an old hit follow an unrelated unit when a plate is reused.
+    hit.suppressed=true
+    hit.fs:Hide()
+    releaseStatusLabel(hit)
+    hit.fs:SetParent(fxLayer)
+   end
   end
  end
 end
@@ -710,28 +834,37 @@ local function placePlayerHeal(fs,anchor,x,y)
   fs:SetPoint('CENTER',anchor,'TOP',x,y)
  end
 end
-local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,isHeal,isGlancing,blockKind)
+local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,isHeal,isGlancing,blockKind,unverified,isXP)
  if not plate then return false end
- if not preview and (not db.enabled or (db.damageSource~='smart' and db.damageSource~='all')) then return false end
+ if not preview and (not db.enabled or (db.damageSource~='coverage' and db.damageSource~='all')) then return false end
  local removed=not isHeal and allowRemoved and recentForPlate(plate)
  -- Leave ordinary damage anchored on the Blizzard nameplate exactly as in
  -- 0.7.12. Only an already hidden/vanishing nameplate uses the overlay,
  -- after confirming it has a cached position. This branch must never require
  -- screen coordinates for ordinary hits on visible nameplates.
  local hiddenFinal=false
- if not isHeal and plate.IsShown and not plate:IsShown() and not removed then
-  if platePositions[plate] or rememberPosition(plate) then hiddenFinal=true
-  else return false end
+ if not isHeal and plate.IsShown and not removed then
+  local ok,shown=pcall(plate.IsShown,plate)
+  if not ok or not safeValue(shown) or shown~=true then
+   if platePositions[plate] or rememberPosition(plate) then hiddenFinal=true
+   else return false end
+  end
  end
  local detached=(removed and true or false) or hiddenFinal
+ local anchor
+ if not detached and not isHeal and db.plateDisplayEnabled and plateDisplay then
+  anchor=plateDisplay:Attach(plate)
+  if anchor then plateRenderStats.anchored=plateRenderStats.anchored+1
+  else plateRenderStats.fallback=plateRenderStats.fallback+1 end
+ end
  local fs=table.remove(pool)
  if not fs then fs=UIParent:CreateFontString(nil,'OVERLAY') end
- fs:SetParent((detached or isHeal) and fxLayer or plate)
+ fs:SetParent(isHeal and plate or detached and fxLayer or anchor or plate)
  fs:ClearAllPoints()
  local position=not isHeal and (removed and (removed.position or platePositions[plate]) or (hiddenFinal and platePositions[plate]) or rememberPosition(plate)) or nil
  local mode=db.animationStyle or 'arc'
- local offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0
- local offsetY=db[mode..(critical and 'CritY' or 'NormalY')] or 0
+ local offsetX=(isHeal and 0) or db[mode..(critical and 'CritX' or 'NormalX')] or 0
+ local offsetY=(isHeal and 0) or db[mode..(critical and 'CritY' or 'NormalY')] or 0
  -- Initial placement must match the selected motion profile (no first-frame jump).
  local initialY=db.startY
  if db.animationStyle=='popup' then initialY=db.popupStartY
@@ -739,11 +872,13 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
  elseif db.animationStyle=='bounce' then initialY=db.bounceStartY end
  if isHeal then placePlayerHeal(fs,plate,offsetX,initialY+offsetY)
  elseif detached and position then fs:SetPoint('CENTER',fxLayer,'BOTTOMLEFT',position.x+offsetX,position.y+initialY+offsetY)
+ elseif anchor then fs:SetPoint('CENTER',anchor,'CENTER',offsetX,initialY+offsetY)
  else fs:SetPoint('CENTER',plate,'TOP',offsetX,initialY+offsetY) end
  local fontName=critical and db.critFont or db.font
  local baseSize=db.size*(critical and db.critScale or 1)
  setFont(fs,baseSize,fontName)
- if isHeal then fs:SetTextColor(.30,1,.43)
+ if isXP then fs:SetTextColor(.72,.43,1) -- Violet XP; incoming healing stays green
+ elseif isHeal then fs:SetTextColor(.30,1,.43)
  elseif isNotice=='MISS' then fs:SetTextColor(.78,.84,.91)
  elseif isNotice=='DODGE' then fs:SetTextColor(1,.77,.39)
  elseif isNotice=='PARRY' then fs:SetTextColor(.92,.94,.96)
@@ -751,6 +886,7 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
  elseif blockKind then fs:SetTextColor(.73,.77,.83)
  elseif isGlancing then fs:SetTextColor(.84,.87,.91)
  elseif critical then fs:SetTextColor(1,.86,.12)
+ elseif unverified then fs:SetTextColor(.76,.84,.93)
  else fs:SetTextColor(1,1,1) end
  -- A secret amount is sent ONLY to the UI setter: no tostring, comparison or math.
  local ok=pcall(function() fs:SetText(amount) end)
@@ -780,11 +916,11 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
   travel=db.bounceTravel
  else mode='arc' end
  fs:SetAlpha(1);fs:Show()
- local hit={fs=fs,plate=plate,position=position,detached=detached,heal=isHeal,t=0,dir=dir,mode=mode,
+ local hit={fs=fs,plate=plate,anchor=anchor,position=position,detached=detached,heal=isHeal,t=0,dir=dir,mode=mode,
   duration=duration,startY=startY,rise=rise,arc=arc,curve=curve,fade=fade,
   peak=peak,intro=intro,hold=hold,drift=drift,sway=sway,decay=decay,travel=travel,
   offsetX=offsetX,offsetY=offsetY,
-  baseSize=baseSize,fontName=fontName,lastScale=1}
+  baseSize=baseSize,fontName=fontName,lastScale=1,xp=isXP}
  if not isNotice and not isHeal then
   if blockKind then hit.statusLabel=createStatusLabel(fs,fontName,baseSize,'BLOCKED')
   elseif isGlancing then hit.statusLabel=createStatusLabel(fs,fontName,baseSize,'GLANCING') end
@@ -793,7 +929,7 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
  -- A BLOCK event may report the amount BLOCKED, not damage landed. Do not
  -- promote that value to last-hit/Overkill; WOUND/DAMAGE with BLOCKED
  -- descriptor still reports real landed damage and remains eligible.
- if not preview and not isNotice and not isHeal and blockKind~="result" then
+ if not preview and not isNotice and not isHeal and blockKind~="result" and not unverified then
   lastHits[plate]={hit=hit,at=GetTime(),position=position,amount=amount,critical=critical,
    startY=startY,offsetX=offsetX,offsetY=offsetY}
   -- The final UNIT_COMBAT may arrive after PARTY_KILL; the ribbon uses
@@ -805,10 +941,39 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
  end
  return true
 end
+-- PLAYER_XP_UPDATE is sourced from the player's own XP bar, not UNIT_COMBAT.
+-- Skip the initial sample and any unreadable/secret API values.
+local function snapshotXP()
+ if type(UnitXP)~='function' or type(UnitXPMax)~='function' then return nil end
+ local ok,now,maximum=pcall(function() return UnitXP('player'),UnitXPMax('player') end)
+ if not ok or not safeValue(now) or not safeValue(maximum)
+    or type(now)~='number' or type(maximum)~='number'
+    or maximum<=0 or now<0 then return nil end
+ return now,maximum
+end
+local function showXPUpdate()
+ local now,maximum=snapshotXP()
+ if not now then playerTextStats.ignored=playerTextStats.ignored+1;return end
+ local before,beforeMax=xpPrevious,xpPreviousMax
+ xpPrevious,xpPreviousMax=now,maximum
+ if before==nil or beforeMax==nil then return end
+ local gained=now-before
+ if gained<0 and beforeMax>before then
+  -- The XP bar wrapped after a level-up.
+  gained=beforeMax-before+now
+ end
+ if gained<=0 or gained>100000000 then return end
+ if not db or not db.enabled or db.damageSource~='coverage' then return end
+ local anchor=playerDisplay and playerDisplay:Attach('xp')
+ if not anchor then anchor=playerHealAnchor() end
+ local ok,shown=pcall(startNumber,anchor,'+'..math.floor(gained+.5)..' XP',false,false,false,nil,true,nil,nil,nil,true)
+ if ok and shown then playerTextStats.xp=playerTextStats.xp+1
+ else playerTextStats.ignored=playerTextStats.ignored+1 end
+end
 -- The client passes a display-only COMBAT_LOG_MESSAGE from Blizzard's selected
 -- combat log filter. The message contents are never decoded or inspected if secret.
 local function onFilteredCombatMessage(message,order)
- if not db or not db.enabled or db.damageSource~='smart' then return end
+ if not db or not db.enabled or db.damageSource~='coverage' then return end
  local oldest=Enum and Enum.CombatLogMessageOrder and Enum.CombatLogMessageOrder.Oldest
  if oldest~=nil and not (issecretvalue and issecretvalue(order)) and order==oldest then
   smartStats.oldest=smartStats.oldest+1;return
@@ -825,19 +990,25 @@ local function onFilteredCombatMessage(message,order)
  smartCredits[#smartCredits+1]={at=GetTime()}
  if #smartCredits>60 then table.remove(smartCredits,1);smartStats.expired=smartStats.expired+1 end
 end
-local function queueSmartHit(unit,plate,amount,critical,notice,isGlancing,blockKind)
+local function queueSmartHit(unit,plate,amount,critical,notice,isGlancing,blockKind,kind,action)
  -- Filtering solely by timing can accidentally pair other players' pets with
  -- our credits. The victim must be our target (or our OWN pet's target).
  local permitted,petCandidate=isPersonalTarget(unit,plate)
+ local coverageEligible=false
+ if db.damageSource=='coverage' then
+  coverageEligible=coverageOwnTarget(unit,plate)
+  if coverageEligible and not permitted then permitted=true end
+ end
  if not permitted then smartStats.discarded=smartStats.discarded+1;return end
  smartStats.queued=smartStats.queued+1
  -- Store protected damage amounts verbatim: SetText is their only consumer.
  if petCandidate then petStats.candidates=petStats.candidates+1 end
- smartPending[#smartPending+1]={at=GetTime(),unit=unit,plate=plate,amount=amount,critical=critical,notice=notice,isGlancing=isGlancing,blockKind=blockKind,petCandidate=petCandidate}
+ smartPending[#smartPending+1]={at=GetTime(),unit=unit,plate=plate,amount=amount,critical=critical,notice=notice,isGlancing=isGlancing,blockKind=blockKind,petCandidate=petCandidate,
+  coverageEligible=coverageEligible,coverageKind=kind or 'unknown',coverageAlias=(unit=='target'),coverageAction=action}
  if #smartPending>60 then table.remove(smartPending,1);smartStats.discarded=smartStats.discarded+1 end
 end
 local function processSmartHits()
- if not db or not db.enabled or db.damageSource~='smart' then return end
+ if not db or not db.enabled or db.damageSource~='coverage' then return end
  local now=GetTime()
  local i=1
  while i<=#smartCredits do
@@ -861,6 +1032,7 @@ local function processSmartHits()
     local late=recentForPlate(hit.plate)~=nil
     local ok,shown=pcall(startNumber,hit.plate,hit.amount,hit.critical,false,late,hit.notice,false,hit.isGlancing,hit.blockKind)
     if ok and shown then
+     if db.damageSource=='coverage' then coverageStats.credited=coverageStats.credited+1;coverageRecord(hit.coverageKind) end
      smartStats.matched=smartStats.matched+1
      if hit.petCandidate then petStats.matched=petStats.matched+1 end
      if not hit.notice and hit.blockKind~="result" then
@@ -878,9 +1050,25 @@ local function processSmartHits()
   local hit=smartPending[j]
   if now-hit.at>SMART_EXPIRE then
    table.remove(smartPending,j)
-   -- NEVER display an unmatched pet-target hit. It can belong to another
-   -- player's pet or a spell landing at the same instant.
-   smartStats.discarded=smartStats.discarded+1
+   -- Best-effort display of repeated DoT ticks and unmatched hits on targets
+   -- that the player cast/swang at. The victim-only event cannot prove who
+   -- attacked; never do this in a party/raid.
+   local allowed=db.damageSource=='coverage' and hit.coverageEligible and coverageIsSolo()
+   if allowed and hit.coverageAlias and coverageAliasDuplicate(hit.plate,hit.coverageAction,hit.at) then
+    allowed=false;coverageStats.aliasSkipped=coverageStats.aliasSkipped+1
+   end
+   if allowed then
+    local late=recentForPlate(hit.plate)~=nil
+    local ok,shown=pcall(startNumber,hit.plate,hit.amount,hit.critical,false,late,hit.notice,false,hit.isGlancing,hit.blockKind,true)
+    if ok and shown then
+     coverageStats.soloFallback=coverageStats.soloFallback+1
+     coverageRecord(hit.coverageKind)
+     -- Victim-only solo fallback is not evidence of a personal killing blow.
+    else smartStats.failed=smartStats.failed+1 end
+   else
+    smartStats.discarded=smartStats.discarded+1
+    if db.damageSource=='coverage' then coverageStats.unverified=coverageStats.unverified+1 end
+   end
   end
  end
 end
@@ -1031,7 +1219,7 @@ local function resolvePersonalKillSignals()
  end
 end
 local function inferRecentlyRemovedKills()
- if not db or not db.enabled or not db.showKillingBlow or db.damageSource~='smart' then return end
+ if not db or not db.enabled or not db.showKillingBlow or db.damageSource~='coverage' then return end
  local now=GetTime()
  for _,entry in pairs(recentPlates) do
   local plate=entry.plate
@@ -1090,7 +1278,12 @@ engine:SetScript('OnUpdate',function(_,elapsed)
  if plateCacheTick>=.08 then
   plateCacheTick=0
   for unit,plate in pairs(plates) do
-   if not plate.IsShown or plate:IsShown() then
+   local shown=true
+   if plate.IsShown then
+    local ok,result=pcall(plate.IsShown,plate)
+    shown=ok and safeValue(result) and result==true
+   end
+   if shown then
     rememberPosition(plate)
     if isUnitTarget(unit) then lastTargetPlate,lastTargetAt=plate,GetTime() end
    end
@@ -1105,14 +1298,27 @@ engine:SetScript('OnUpdate',function(_,elapsed)
    a.fs:Hide();a.fs:SetParent(UIParent);pool[#pool+1]=a.fs;table.remove(active,i)
   elseif not a.suppressed then
    if not a.detached and not a.heal then
-    if a.plate.IsShown and not a.plate:IsShown() then
+    local shown=true
+    if a.plate.IsShown then
+     local ok,value=pcall(a.plate.IsShown,a.plate)
+     shown=ok and safeValue(value) and value==true
+    end
+    if not shown then
      a.position=platePositions[a.plate] or a.position
      a.detached=true
+     a.anchor=nil
      a.fs:SetParent(fxLayer)
-    else
+     if not a.position then
+      a.suppressed=true
+      a.fs:Hide()
+      releaseStatusLabel(a)
+     end
+    elseif not a.anchor then
+     -- Independent anchors move with the plate: no per-frame coordinate read.
      a.position=rememberPosition(a.plate) or a.position
     end
    end
+   if not a.suppressed then
    local x,y,scale=motionAt(a,p)
    -- Popup and bounce animate text size; normal hits don't update fonts per frame.
    if scale and math.abs(scale-(a.lastScale or 1))>=.035 then
@@ -1130,6 +1336,7 @@ engine:SetScript('OnUpdate',function(_,elapsed)
     a.fs:SetPoint('CENTER',fxLayer,'BOTTOMLEFT',a.position.x+x,a.position.y+y)
    else
     anchorNumber(a.fs,a,x,y)
+   end
    end
   end
  end
@@ -1167,16 +1374,16 @@ engine:SetScript('OnUpdate',function(_,elapsed)
    end
   end
  end
- if db and db.enabled and (db.damageSource=='smart' or db.damageSource=='all') then
-  if db.damageSource=='smart' then processSmartHits() end
+ if db and db.enabled and (db.damageSource=='coverage' or db.damageSource=='all') then
+  if db.damageSource=='coverage' then processSmartHits() end
   resolvePersonalKillSignals()
-  if db.damageSource=='smart' then inferRecentlyRemovedKills() end
+  -- Preserve original kill attribution; Coverage uses its own verification rules.
   processKillingBlows()
   for unit,entry in pairs(recentPlates) do
    if GetTime()-entry.at>DEATH_GRACE then recentPlates[unit]=nil end
   end
   smartTick=smartTick+elapsed
-  if db.damageSource=='smart' and smartTick>3 then smartTick=0;enableFilteredLog() end
+  if db.damageSource=='coverage' and smartTick>3 then smartTick=0;enableFilteredLog() end
  end
 end)
 -- UI helpers. Compact charcoal/orange typographic style inspired by
@@ -1298,7 +1505,7 @@ local function createWindow()
  if window then return window end
  uiTextEntries={};uiButtons={};uiAccentTexts={};uiAccentTextures={}
  local w=CreateFrame('Frame',nil,UIParent)
- window=w
+ -- Cache only after the full UI has been constructed successfully.
  -- Reserve space for a persistent bottom action bar on every tab.
  local minWidth,minHeight,maxWidth,maxHeight=755,760,1100,940
  local function clampSize(n,minimum,maximum)
@@ -1467,40 +1674,61 @@ local function createWindow()
    b:SetSize(width,34)
   end)
  end
- -- Top-bar sliders are independent of the content tabs and update live.
- local function topSlider(key,title,x,minimum,maximum,apply)
-  label(w,title,x,-14,10,.80,.84,.90)
-  local current=label(w,'',x+150,-14,11,1,.70,.44)
+ -- Top controls live in a raised, non-draggable region ABOVE full-window tabs.
+ -- A single layout function keeps both slider tracks on the same row at any width.
+ local topBar=CreateFrame('Frame',nil,w)
+ topBar:SetPoint('TOPLEFT',w,'TOPLEFT',274,-7)
+ topBar:SetPoint('TOPRIGHT',w,'TOPRIGHT',-25,-7)
+ topBar:SetHeight(57)
+ if topBar.SetFrameLevel and w.GetFrameLevel then topBar:SetFrameLevel(w:GetFrameLevel()+35) end
+ if topBar.EnableMouse then topBar:EnableMouse(true) end
+ local sliderGroups={}
+ local function topSlider(key,title,minimum,maximum,apply)
+  local heading=label(topBar,title,0,-5,10,.80,.84,.90)
+  local current=label(topBar,'',0,-5,11,1,.70,.44)
   uiAccentTexts[#uiAccentTexts+1]=current
-  local slider=CreateFrame('Slider',nil,w)
+  local slider=CreateFrame('Slider',nil,topBar)
   slider:SetOrientation('HORIZONTAL')
-  slider:SetPoint('TOPLEFT',w,'TOPLEFT',x,-42)
-  slider:SetSize(173,13)
+  slider:SetSize(180,16)
   slider:SetMinMaxValues(minimum,maximum);slider:SetValueStep(1)
   if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
+  if slider.EnableMouse then slider:EnableMouse(true) end
+  if slider.SetHitRectInsets then slider:SetHitRectInsets(0,0,-5,-5) end
   local track=slider:CreateTexture(nil,'BACKGROUND')
   track:SetPoint('LEFT',slider,'LEFT');track:SetPoint('RIGHT',slider,'RIGHT')
-  track:SetHeight(4);tintTexture(track,{.30,.34,.40})
+  track:SetHeight(5);tintTexture(track,{.30,.34,.40})
   slider:SetThumbTexture('Interface\\Buttons\\UI-SliderBar-Button-Horizontal')
-  local thumb=slider:GetThumbTexture();if thumb then thumb:SetSize(18,21) end
+  local thumb=slider:GetThumbTexture();if thumb then thumb:SetSize(20,23) end
   slider:SetScript('OnValueChanged',function(_,value)
+   if type(value)~='number' then return end
    local n=math.floor(math.max(minimum,math.min(maximum,value))+.5)
    db[key]=n
    current:SetText(n..'%')
    apply(n)
   end)
   slider:SetValue(db[key] or 100)
+  sliderGroups[#sliderGroups+1]={heading=heading,value=current,slider=slider}
   if key=='windowScale' then w._scaleSlider=slider else w._opacitySlider=slider end
-  addResponsive(function(extra)
-   -- Keep the entire slider group clear of the title and the window edge.
-   local shift=extra*(x==512 and 1 or .5)
-   slider:ClearAllPoints();slider:SetPoint('TOPLEFT',w,'TOPLEFT',x+shift,-42)
-   current:ClearAllPoints();current:SetPoint('TOPLEFT',w,'TOPLEFT',x+150+shift,-14)
-  end)
  end
- topSlider('windowScale','WINDOW SCALE',287,70,130,function(n) w:SetScale(n/100) end)
- topSlider('windowOpacity','OPACITY',512,0,100,function(n) w:SetAlpha(n/100) end)
- -- Sidebar footer follows the lower edge when the user resizes the window.
+ topSlider('windowScale','WINDOW SCALE',75,120,function(n) w:SetScale(n/100) end)
+ topSlider('windowOpacity','OPACITY',0,100,function(n) w:SetAlpha(n/100) end)
+ local function positionTopSliders()
+  local available=math.max(420,(w:GetWidth() or minWidth)-299)
+  local gap=22
+  local width=(available-gap)/2
+  for i,group in ipairs(sliderGroups) do
+   local x=(i-1)*(width+gap)
+   group.heading:ClearAllPoints()
+   group.heading:SetPoint('TOPLEFT',topBar,'TOPLEFT',x,-5)
+   group.value:ClearAllPoints()
+   group.value:SetPoint('TOPRIGHT',topBar,'TOPLEFT',x+width,-5)
+   group.slider:ClearAllPoints()
+   group.slider:SetPoint('TOPLEFT',topBar,'TOPLEFT',x,-34)
+   group.slider:SetWidth(width-6)
+  end
+ end
+ addResponsive(function() positionTopSliders() end)
+ w._topSliderBar=topBar -- Sidebar footer follows the lower edge when the user resizes the window.
  local wow_name_version,wow_number_version=wowClientVersions()
  local footerRule=fixedTexture(w,'BOTTOMLEFT',16,70,158,1,.23,.27,.33,.9)
  local addonFooter=label(w,'ADDON  v'..addonVersion(),20,-657,10,1,.60,.29)
@@ -1527,14 +1755,14 @@ local function createWindow()
   clearNumbers();clearQueues()
   if not db.enabled then enableNative()
   elseif db.damageSource=='player' then enableNative()
-  else disableNative();if db.damageSource=='smart' then enableFilteredLog() end end
+  else disableNative();if db.damageSource=='coverage' then enableFilteredLog() end end
   refreshGeneral()
  end)
  section(general,'COMBAT TEXT MODE',-275)
  local choices={}
- local sourceNames={smart='SMART  /  PERSONAL DAMAGE',player='BLIZZARD  /  NATIVE DAMAGE',all='ALL DAMAGE  /  UNFILTERED'}
+ local sourceNames={coverage='COVERAGE  /  MELEE + SPELL + DoT + HEAL + XP',player='BLIZZARD  /  NATIVE DAMAGE',all='ALL DAMAGE  /  UNFILTERED'}
  local sourceDescriptions={
-  smart='ShaaenFCT / My Actions combat-log filter + curved motion',
+  coverage='Extended tracked-target damage (solo fallback)',
   player='Accurate source filtering, native text only',
   all='Also displays damage from other players'
  }
@@ -1544,19 +1772,17 @@ local function createWindow()
   b.description=label(b,sourceDescriptions[key],15,-29,10,.60,.64,.70)
   choices[key]=b
  end
- sourceChoice('smart',-297)
- sourceChoice('player',-352)
- sourceChoice('all',-407)
- label(general,'SMART: ShaaenFCT filter / My Actions fallback (own and pet hits).',220,-464,11,.75,.79,.83)
- button(general,'USE SHAAENFCT FILTER',220,-489,229,34,function()
-  if InCombatLockdown and InCombatLockdown() then say('Use the filter outside combat.');return end
-  local filter=_G.ShaaenFCTCombatFilter
-  if not filter or type(filter.Activate)~='function' then say('Combat filter module unavailable.');return end
-  local ok,success,result=pcall(filter.Activate,filter)
-  if not ok or not success then say(result or 'Blizzard filter unavailable; use My Actions.');return end
-  setSource('smart')
-  enableFilteredLog()
-  say(result)
+  sourceChoice('coverage',-352)
+ sourceChoice('player',-407)
+ label(general,'Coverage: enemy damage + green HEAL and violet XP player frames.',220,-464,11,.75,.79,.83)
+ button(general,'OPEN COMBAT LOG',220,-489,229,34,function()
+  if InCombatLockdown and InCombatLockdown() then say('Open the Combat Log outside combat.');return end
+  local log=_G.COMBATLOG
+  if log and type(FCF_SelectDockFrame)=='function' then
+   local ok=pcall(FCF_SelectDockFrame,log)
+   if ok then enableFilteredLog();say('Select the My Actions filter, then return to chat.');return end
+  end
+  say('Open Combat Log and select My Actions.')
  end,true)
  -- Let Smart match filtered log messages on the OWN pet's current target;
  -- never infer pet hits just because a unit took damage.
@@ -1953,35 +2179,35 @@ local function createWindow()
  end
  for idx,key in ipairs({'arc','popup','float','bounce'}) do
   local x=216+(idx-1)*127
-  subButtons[key]=button(animation,subNames[key],x,-166,119,34,function() selectAnimationStyle(key) end)
+  subButtons[key]=button(animation,subNames[key],x,-209,119,34,function() selectAnimationStyle(key) end)
   local animButton=subButtons[key]
   addResponsive(function(extra)
    local width=(500+extra-24)/4
    animButton:SetSize(width,34)
-   anchorTopLeft(animButton,animation,216+(idx-1)*(width+8),-166)
+   anchorTopLeft(animButton,animation,216+(idx-1)*(width+8),-209)
   end)
   local p=CreateFrame('Frame',nil,animation)
   p:SetAllPoints(animation);p:Hide();subTabs[key]=p
-  label(p,subDescriptions[key],220,-209,11,.67,.71,.77)
-  local separator=fixedTexture(p,'TOPLEFT',460,-235,1,312,.25,.28,.33,.8)
-  addResponsive(function(extra) anchorTopLeft(separator,p,460+extra/2,-235) end)
-  label(p,'MOTION / TIMING',222,-237,11,1,.63,.35)
-  rightLabel(p,'NORMAL DAMAGE / POSITION',475,-237,10,1,.63,.35)
-  compactSlider(p,key..'NormalX','Offset X',475,-269,' px',true)
-  compactSlider(p,key..'NormalY','Offset Y',475,-312,' px',true)
-  rightLabel(p,'CRITICAL DAMAGE / POSITION',475,-378,10,1,.63,.35)
-  compactSlider(p,key..'CritX','Offset X',475,-410,' px',true)
-  compactSlider(p,key..'CritY','Offset Y',475,-453,' px',true)
-  rightLabel(p,'X: left (-) / right (+)',475,-503,10,.63,.67,.72)
-  rightLabel(p,'Y: down (-) / up (+)',475,-520,10,.63,.67,.72)
+  label(p,subDescriptions[key],220,-252,11,.67,.71,.77)
+  local separator=fixedTexture(p,'TOPLEFT',460,-278,1,312,.25,.28,.33,.8)
+  addResponsive(function(extra) anchorTopLeft(separator,p,460+extra/2,-278) end)
+  label(p,'MOTION / TIMING',222,-280,11,1,.63,.35)
+  rightLabel(p,'NORMAL DAMAGE / POSITION',475,-280,10,1,.63,.35)
+  compactSlider(p,key..'NormalX','Offset X',475,-312,' px',true)
+  compactSlider(p,key..'NormalY','Offset Y',475,-355,' px',true)
+  rightLabel(p,'CRITICAL DAMAGE / POSITION',475,-421,10,1,.63,.35)
+  compactSlider(p,key..'CritX','Offset X',475,-453,' px',true)
+  compactSlider(p,key..'CritY','Offset Y',475,-496,' px',true)
+  rightLabel(p,'X: left (-) / right (+)',475,-546,10,.63,.67,.72)
+  rightLabel(p,'Y: down (-) / up (+)',475,-563,10,.63,.67,.72)
  end
  local arcPane=subTabs.arc
- compactSlider(arcPane,'duration','Duration',222,-267,' s')
- compactSlider(arcPane,'startY','Starting height',222,-310,' px')
- compactSlider(arcPane,'rise','Vertical rise',222,-353,' px')
- compactSlider(arcPane,'arc','Horizontal travel',222,-396,' px')
- compactSlider(arcPane,'curve','Arc curve',222,-439,' px')
- compactSlider(arcPane,'fade','Fade starts at',222,-482,' %')
+ compactSlider(arcPane,'duration','Duration',222,-310,' s')
+ compactSlider(arcPane,'startY','Starting height',222,-353,' px')
+ compactSlider(arcPane,'rise','Vertical rise',222,-396,' px')
+ compactSlider(arcPane,'arc','Horizontal travel',222,-439,' px')
+ compactSlider(arcPane,'curve','Arc curve',222,-482,' px')
+ compactSlider(arcPane,'fade','Fade starts at',222,-525,' %')
  -- Direction controls are separate for every profile and do not affect X/Y offsets.
  local directionFields={arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'}
  local directionButtons={}
@@ -1997,11 +2223,11 @@ local function createWindow()
  for _,style in ipairs({'arc','popup','float','bounce'}) do
   local parent=subTabs[style]
   directionButtons[style]={}
-  rightLabel(parent,'HORIZONTAL DIRECTION',475,-544,10,1,.63,.35)
+  rightLabel(parent,'HORIZONTAL DIRECTION',475,-587,10,1,.63,.35)
   for i,key in ipairs({'left','right','alternate','random'}) do
    local col=(i-1)%2
    local row=math.floor((i-1)/2)
-   directionButtons[style][key]=button(parent,'',475+col*125,-562-row*33,118,28,function()
+   directionButtons[style][key]=button(parent,'',475+col*125,-605-row*33,118,28,function()
     db[directionFields[style]]=key
     redrawDirection(style)
    end)
@@ -2009,36 +2235,36 @@ local function createWindow()
    addResponsive(function(extra)
     local buttonWidth=118+extra/4
     directionButton:SetWidth(buttonWidth)
-    anchorTopLeft(directionButton,parent,475+extra/2+col*(buttonWidth+7),-562-row*33)
+    anchorTopLeft(directionButton,parent,475+extra/2+col*(buttonWidth+7),-605-row*33)
    end)
   end
   redrawDirection(style)
  end
  local popupPane=subTabs.popup
- compactSlider(popupPane,'popupDuration','Duration',222,-267,' s')
- compactSlider(popupPane,'popupStartY','Starting height',222,-310,' px')
- compactSlider(popupPane,'popupRise','Vertical travel',222,-353,' px')
- compactSlider(popupPane,'popupPeak','Peak size',222,-396,'×')
- compactSlider(popupPane,'popupIn','Pop-in duration',222,-439,' %')
- compactSlider(popupPane,'popupHold','Peak hold',222,-482,' %')
- compactSlider(popupPane,'popupFade','Fade starts at',222,-525,' %')
- compactSlider(popupPane,'popupTravel','Side travel',222,-568,' px')
+ compactSlider(popupPane,'popupDuration','Duration',222,-310,' s')
+ compactSlider(popupPane,'popupStartY','Starting height',222,-353,' px')
+ compactSlider(popupPane,'popupRise','Vertical travel',222,-396,' px')
+ compactSlider(popupPane,'popupPeak','Peak size',222,-439,'×')
+ compactSlider(popupPane,'popupIn','Pop-in duration',222,-482,' %')
+ compactSlider(popupPane,'popupHold','Peak hold',222,-525,' %')
+ compactSlider(popupPane,'popupFade','Fade starts at',222,-568,' %')
+ compactSlider(popupPane,'popupTravel','Side travel',222,-611,' px')
  local floatPane=subTabs.float
- compactSlider(floatPane,'floatDuration','Duration',222,-267,' s')
- compactSlider(floatPane,'floatStartY','Starting height',222,-310,' px')
- compactSlider(floatPane,'floatRise','Vertical rise',222,-353,' px')
- compactSlider(floatPane,'floatDrift','Side drift',222,-396,' px')
- compactSlider(floatPane,'floatSway','Side sway',222,-439,' px')
- compactSlider(floatPane,'floatFade','Fade starts at',222,-482,' %')
+ compactSlider(floatPane,'floatDuration','Duration',222,-310,' s')
+ compactSlider(floatPane,'floatStartY','Starting height',222,-353,' px')
+ compactSlider(floatPane,'floatRise','Vertical rise',222,-396,' px')
+ compactSlider(floatPane,'floatDrift','Side drift',222,-439,' px')
+ compactSlider(floatPane,'floatSway','Side sway',222,-482,' px')
+ compactSlider(floatPane,'floatFade','Fade starts at',222,-525,' %')
  local bouncePane=subTabs.bounce
- compactSlider(bouncePane,'bounceDuration','Duration',222,-267,' s')
- compactSlider(bouncePane,'bounceStartY','Starting height',222,-310,' px')
- compactSlider(bouncePane,'bounceHeight','Bounce height',222,-353,' px')
- compactSlider(bouncePane,'bouncePeak','Peak size',222,-396,'×')
- compactSlider(bouncePane,'bounceDecay','Damping',222,-439,'')
- compactSlider(bouncePane,'bounceFade','Fade starts at',222,-482,' %')
- compactSlider(bouncePane,'bounceTravel','Side travel',222,-525,' px')
- local resetStyleButton=button(animation,'RESET THIS STYLE',220,-657,235,32,function()
+ compactSlider(bouncePane,'bounceDuration','Duration',222,-310,' s')
+ compactSlider(bouncePane,'bounceStartY','Starting height',222,-353,' px')
+ compactSlider(bouncePane,'bounceHeight','Bounce height',222,-396,' px')
+ compactSlider(bouncePane,'bouncePeak','Peak size',222,-439,'×')
+ compactSlider(bouncePane,'bounceDecay','Damping',222,-482,'')
+ compactSlider(bouncePane,'bounceFade','Fade starts at',222,-525,' %')
+ compactSlider(bouncePane,'bounceTravel','Side travel',222,-568,' px')
+ local resetStyleButton=button(animation,'RESET THIS STYLE',220,-159,235,32,function()
   for _,key in ipairs(profiles[db.animationStyle] or profiles.arc) do db[key]=defaults[key] end
   for _,key in ipairs(profiles[db.animationStyle] or profiles.arc) do
    local widget=animationSliders[key]
@@ -2049,7 +2275,7 @@ local function createWindow()
   end
   redrawDirection(db.animationStyle)
  end)
- local previewStyleButton=button(animation,'PREVIEW STYLE',469,-657,250,32,function()
+ local previewStyleButton=button(animation,'PREVIEW STYLE',469,-159,250,32,function()
   if not previewAnchor then
    previewAnchor=CreateFrame('Frame',nil,UIParent)
    previewAnchor:SetSize(160,12);previewAnchor:SetPoint('CENTER',UIParent,'CENTER',0,-80)
@@ -2060,9 +2286,9 @@ local function createWindow()
  addResponsive(function(extra)
   local half=(499+extra-14)/2
   resetStyleButton:SetSize(half,32)
-  anchorTopLeft(resetStyleButton,animation,220,-657)
+  anchorTopLeft(resetStyleButton,animation,220,-159)
   previewStyleButton:SetSize(half,32)
-  anchorTopLeft(previewStyleButton,animation,220+half+14,-657)
+  anchorTopLeft(previewStyleButton,animation,220+half+14,-159)
  end)
  selectAnimationStyle(db.animationStyle or 'arc')
  -- ABOUT / separate from Help for a clean sidebar navigation.
@@ -2117,24 +2343,24 @@ local function createWindow()
  discordInput:SetScript('OnEnterPressed',saveDiscord)
  discordInput:SetScript('OnEscapePressed',function(self) self:SetText(db.discordInvite or '');self:ClearFocus() end)
  refreshDiscordStatus()
- label(about,'Built for personal damage filtering, custom fonts and animation styles.',220,-614,11,.64,.69,.75)
+ label(about,'Damage, incoming heals, XP, custom fonts and animation styles.',220,-614,11,.64,.69,.75)
 
  -- HELP / quick start and slash commands only.
  header(help,'Help','Quick start and slash commands')
  section(help,'QUICK START',-178)
- label(help,'1. Open Settings > General and select SMART.',220,-209,12)
+ label(help,'1. Open Settings > General and select COVERAGE.',220,-209,12)
  label(help,'2. Open the Blizzard Combat Log.',220,-237,12)
- label(help,'3. Click USE SHAAENFCT FILTER (or select My Actions).',220,-265,12)
+ label(help,'3. Select My Actions (include Pet when relevant).',220,-265,12)
  label(help,'4. Attack a target with a visible nameplate.',220,-293,12)
  section(help,'SLASH COMMANDS',-347)
  label(help,'/sfct                 Open / close settings',220,-377,12)
  label(help,'/sfct open            Open settings',220,-405,12)
- label(help,'/sfct source smart    Smart personal damage',220,-433,12)
+ label(help,'/sfct source coverage  Melee, spells, DoT, heal and XP',220,-433,12)
  label(help,'/sfct source player   Blizzard native damage',220,-461,12)
  label(help,'/sfct source all      Unfiltered damage',220,-489,12)
  label(help,'/sfct status          Compact status',220,-517,12)
- label(help,'/sfct minimap show | hide | reset',220,-545,12)
- label(help,'/sfct log create      Create/select ShaaenFCT log filter',220,-573,11)
+ label(help,'/sfct plate traffic  Damage routing counts',220,-545,12)
+ label(help,'/sfct pet on | off    Own pet target filter',220,-573,12)
  label(help,'/sfct ui reset          Restore scale and opacity to 100%.',220,-602,11,.69,.73,.77)
  -- Persistent action bar: buttons remain at the bottom-right while resizing.
  local footerLine=fixedTexture(w,'BOTTOMLEFT',207,56,506,1,.25,.28,.33,.85)
@@ -2157,13 +2383,115 @@ local function createWindow()
  applyUISkin()
  selectTab('settings')
  w:Hide()
+ window=w
  return w
 end
+-- Open from the minimap without depending on the /sfct command wrapper.
+-- At 0% opacity the window is technically shown but completely invisible.
+-- Always provide a recovery path when the player clicks the minimap icon.
+local function openSettingsCentered()
+ if not db then return false,'SavedVariables not initialized' end
+ local w=createWindow()
+ if not w then return false,'Settings window unavailable' end
+ if type(db.windowOpacity)~='number' or db.windowOpacity<10 then
+  db.windowOpacity=100
+  if w._opacitySlider then w._opacitySlider:SetValue(100) end
+ end
+ if type(db.windowScale)~='number' or db.windowScale<75 or db.windowScale>120 then
+  db.windowScale=100
+  if w._scaleSlider then w._scaleSlider:SetValue(100) end
+ end
+ -- Force a known visible position and alpha; a hidden frame still reports
+ -- IsShown() = true after :Show() if its inherited opacity remains zero.
+ w:SetAlpha(db.windowOpacity/100)
+ w:SetScale(db.windowScale/100)
+ w:ClearAllPoints()
+ w:SetPoint('CENTER',UIParent,'CENTER',0,0)
+ db.windowX=0;db.windowY=0
+ w:Show()
+ if type(w.Raise)=='function' then pcall(w.Raise,w) end
+ return true
+end
+_G.ShaaenFCTOpenSettings=openSettingsCentered
+
 local function status()
  say('v'..addonVersion()..' / '..(db.enabled and 'ENABLED' or 'DISABLED')..' / Source: '..db.damageSource)
- say('SMART: log='..smartStats.messages..', protected='..smartStats.hidden..', matched='..smartStats.matched..', discarded='..smartStats.discarded..', errors='..smartStats.failed..', flow='..tostring(smartFlow))
+ say('MATCHING: log='..smartStats.messages..', protected='..smartStats.hidden..', matched='..smartStats.matched..', discarded='..smartStats.discarded..', errors='..smartStats.failed..', flow='..tostring(smartFlow))
  say('PETS: own target filter='..tostring(db.petAssist)..', candidates='..petStats.candidates..', log matched='..petStats.matched..', unverified hits discarded')
+ local stats=plateDisplay and plateDisplay:Statistics() or {}
+ say('COVERAGE: physical='..coverageStats.physical..', magical='..coverageStats.magical..', unknown='..coverageStats.unknown..', log credited='..coverageStats.credited..', solo fallback='..coverageStats.soloFallback..', target alias='..coverageStats.targetAlias..', aliases ignored='..coverageStats.aliasSkipped..', zeros suppressed='..coverageStats.zeroSuppressed..', no evidence='..coverageStats.unverified..', tracked casts/swings='..coverageStats.tracked)
+ say('PLAYER FRAMES: green heals='..playerTextStats.heals..', violet XP='..playerTextStats.xp..', XP unavailable='..playerTextStats.ignored)
+ say('NAMEPLATE FRAMES: '..(db.plateDisplayEnabled and 'ON' or 'OFF')..', attached hits='..plateRenderStats.anchored..', fallback='..plateRenderStats.fallback..', created='..(stats.created or 0)..', active anchors='..(stats.attached or 0)..', releases='..(stats.removed or 0)..', anchor errors='..(stats.failed or 0))
  say('FINAL HITS: late='..killStats.late..', kills='..killStats.signals..', matched numbers='..killStats.numeric..', extended='..killStats.effects..', no damage amount='..killStats.labels..', unmatched='..killStats.unmatched..', inferred='..killStats.inferred..', removed plates='..killStats.removed..', UNIT_DIED='..killStats.died..', resolved kills='..killStats.lateSignals..', target fallback='..killFallbackStats.target..', recent hit='..killFallbackStats.personal..', nameplate missing='..killFallbackStats.noNameplate..', location missing='..killFallbackStats.noPosition)
+end
+-- Isolate nameplate lifetime handlers from the central OnEvent callback.
+-- WoW Forever limits a single Lua function to 60 captured upvalues.
+local function onNameplateAdded(unit)
+  recentPlates[unit]=nil
+  if db and db.enabled and C_NamePlate and C_NamePlate.GetNamePlateForUnit then
+   local ok,plate=pcall(C_NamePlate.GetNamePlateForUnit,unit)
+   if ok and plate then
+    -- Blizzard may reuse the frame: discard the previous enemy's DoT history.
+    coverageTargets[plate]=nil
+    coveragePlateEvents[plate]=nil
+    coverageCastPlates[plate]=nil
+    -- Blizzard can reuse a nameplate for a new unit: freeze its old FX first.
+    freezeOverkillsForPlate(plate,platePositions[plate])
+    for i=#pendingKills,1,-1 do
+     if pendingKills[i].plate==plate then
+      -- Resolve a pending previous kill before this plate is recycled.
+      table.remove(pendingKills,i)
+      local info=lastHits[plate]
+      if db.showKillingBlow and info and GetTime()-info.at<=1.65 then
+       if not killDecorated[plate] or killDecorated[plate]~=killScheduled[plate] then
+        if spawnFinalNumberAt(info,plate,platePositions[plate] or info.position,true) then
+         killDecorated[plate]=killScheduled[plate]
+         killStats.numeric=killStats.numeric+1
+        end
+       end
+      else killStats.labels=killStats.labels+1 end
+     end
+    end
+    killScheduled[plate]=nil;killDecorated[plate]=nil;lastHits[plate]=nil;lastShown[plate]=nil;inferredAt[plate]=nil;foreignKillPlates[plate]=nil;confirmedPersonalKills[plate]=nil
+    if lastPersonalPlate==plate then lastPersonalPlate,lastPersonalAt=nil,nil end
+    if lastTargetPlate==plate then lastTargetPlate,lastTargetAt=nil,nil end
+    -- Unmount old visual frames before Blizzard reuses the plate for a new mob.
+    detachNumbers(plate,platePositions[plate])
+    if plateDisplay then plateDisplay:Forget(plate) end
+    -- Detached final-hit frames must never follow the newly reused plate.
+    platePositions[plate]=nil
+    plates[unit]=plate
+    plateGuids[unit]=safeGUID(unit)
+    rememberPosition(plate)
+    if isUnitTarget(unit) then lastTargetPlate,lastTargetAt=plate,GetTime() end
+   end
+  end
+end
+local function onNameplateRemoved(unit)
+  -- Check while the unit token is still meaningful; afterward the client
+  -- may erase the GUID and the nameplate frame immediately.
+  local died=safeDead(unit)
+  rememberRemoved(unit)
+  if plates[unit] then
+   coverageTargets[plates[unit]]=nil
+   coveragePlateEvents[plates[unit]]=nil
+   coverageCastPlates[plates[unit]]=nil
+  end
+  if plateDisplay and plates[unit] then plateDisplay:Forget(plates[unit]) end
+  if recentPlates[unit] then
+   killStats.removed=killStats.removed+1
+   if died then
+    recentPlates[unit].confirmed=true
+    local plate=recentPlates[unit].plate
+    local info=lastHits[plate]
+    if db and db.enabled and db.showKillingBlow and db.damageSource~='player'
+       and info and GetTime()-info.at<=LAST_HIT_WINDOW then
+     schedulePersonalKill(plate,GetTime())
+    end
+   end
+  end
+  plates[unit]=nil
+  plateGuids[unit]=nil
 end
 engine:SetScript('OnEvent',function(_,event,...)
  if event=='ADDON_LOADED' then
@@ -2185,6 +2513,7 @@ engine:SetScript('OnEvent',function(_,event,...)
    db[key]=math.max(range[1],math.min(range[2],db[key]))
   end
   if type(db.showKillingBlow)~='boolean' then db.showKillingBlow=true end
+  if type(db.plateDisplayEnabled)~='boolean' then db.plateDisplayEnabled=true end
   if type(db.petAssist)~='boolean' then db.petAssist=true end
   if not overkillShakeAmplitudes[db.overkillShakeIntensity] then
    db.overkillShakeIntensity=defaults.overkillShakeIntensity
@@ -2193,7 +2522,7 @@ engine:SetScript('OnEvent',function(_,event,...)
   if not UI_COLOR_STYLES[db.uiColorStyle] then db.uiColorStyle='ember' end
   if db.settingsSection~='general' and db.settingsSection~='style' and db.settingsSection~='fonts' then db.settingsSection='general' end
   if type(db.windowScale)~='number' or db.windowScale~=db.windowScale then db.windowScale=100 end
-  db.windowScale=math.max(70,math.min(130,math.floor(db.windowScale+.5)))
+  db.windowScale=math.max(75,math.min(120,math.floor(db.windowScale+.5)))
   if type(db.windowOpacity)~='number' or db.windowOpacity~=db.windowOpacity then db.windowOpacity=100 end
   db.windowOpacity=math.max(0,math.min(100,math.floor(db.windowOpacity+.5)))
   for _,field in ipairs({'direction','popupDirection','floatDirection','bounceDirection'}) do
@@ -2202,77 +2531,35 @@ engine:SetScript('OnEvent',function(_,event,...)
    end
   end
   if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' then db.animationStyle='arc' end
-  -- One-time migration: use Smart on both new and upgraded installations.
-  -- User selections made in 0.7+ are preserved across subsequent reloads.
-  if db.settingsVersion~=7 then db.damageSource='smart';db.settingsVersion=7 end
-  if db.damageSource~='smart' and db.damageSource~='player' and db.damageSource~='all' then db.damageSource='smart' end
+  -- v0.7.42 removes the selectable Smart mode. Keep player / all choices.
+  if db.damageSource~='coverage' and db.damageSource~='player' and db.damageSource~='all' then db.damageSource='coverage' end
+  db.settingsVersion=8
   if db.enabled then
    if db.damageSource=='player' then enableNative() else disableNative() end
-   if db.damageSource=='smart' then enableFilteredLog() end
+   if db.damageSource=='coverage' then enableFilteredLog() end
   end
-  say('v'..addonVersion()..' loaded / '..(db.damageSource=='smart' and 'SMART' or db.damageSource)..' mode /sfct')
+  say('v'..addonVersion()..' loaded / '..db.damageSource..' mode /sfct')
  elseif event=='PLAYER_LOGIN' then
-  if db and db.enabled and db.damageSource=='smart' then enableFilteredLog() end
+  xpPrevious,xpPreviousMax=snapshotXP()
+  if db and db.enabled and db.damageSource=='coverage' then enableFilteredLog() end
  elseif event=='PLAYER_ENTERING_WORLD' or event=='PLAYER_REGEN_ENABLED' then
+  if event=='PLAYER_ENTERING_WORLD' then xpPrevious,xpPreviousMax=snapshotXP() end
   if db and db.enabled and db.damageSource=='player' then enableNative() end
+ elseif event=='PLAYER_XP_UPDATE' then
+  showXPUpdate()
+ elseif event=='UNIT_SPELLCAST_SUCCEEDED' then
+  local unit=...
+  if unit=='player' or unit=='pet' then coverageTrack(unit=='pet' and 'pettarget' or 'target',true) end
+ elseif event=='PLAYER_SWING' then
+  coverageTrack('target')
  elseif event=='COMBAT_LOG_MESSAGE' then
   local message,_,_,_,order=...
   local ok=pcall(onFilteredCombatMessage,message,order)
   if not ok then smartStats.failed=smartStats.failed+1 end
  elseif event=='NAME_PLATE_UNIT_ADDED' then
-  local unit=...
-  recentPlates[unit]=nil
-  if db and db.enabled and C_NamePlate and C_NamePlate.GetNamePlateForUnit then
-   local ok,plate=pcall(C_NamePlate.GetNamePlateForUnit,unit)
-   if ok and plate then
-    -- Blizzard can reuse a nameplate for a new unit: freeze its old FX first.
-    freezeOverkillsForPlate(plate,platePositions[plate])
-    for i=#pendingKills,1,-1 do
-     if pendingKills[i].plate==plate then
-      -- Resolve a pending previous kill before this plate is recycled.
-      table.remove(pendingKills,i)
-      local info=lastHits[plate]
-      if db.showKillingBlow and info and GetTime()-info.at<=1.65 then
-       if not killDecorated[plate] or killDecorated[plate]~=killScheduled[plate] then
-        if spawnFinalNumberAt(info,plate,platePositions[plate] or info.position,true) then
-         killDecorated[plate]=killScheduled[plate]
-         killStats.numeric=killStats.numeric+1
-        end
-       end
-      else killStats.labels=killStats.labels+1 end
-     end
-    end
-    killScheduled[plate]=nil;killDecorated[plate]=nil;lastHits[plate]=nil;lastShown[plate]=nil;inferredAt[plate]=nil;foreignKillPlates[plate]=nil;confirmedPersonalKills[plate]=nil
-    if lastPersonalPlate==plate then lastPersonalPlate,lastPersonalAt=nil,nil end
-    if lastTargetPlate==plate then lastTargetPlate,lastTargetAt=nil,nil end
-    -- Detached final-hit frames must never follow the newly reused plate.
-    platePositions[plate]=nil
-    plates[unit]=plate
-    plateGuids[unit]=safeGUID(unit)
-    rememberPosition(plate)
-    if isUnitTarget(unit) then lastTargetPlate,lastTargetAt=plate,GetTime() end
-   end
-  end
+  onNameplateAdded(...)
  elseif event=='NAME_PLATE_UNIT_REMOVED' then
-  local unit=...
-  -- Check while the unit token is still meaningful; afterward the client
-  -- may erase the GUID and the nameplate frame immediately.
-  local died=safeDead(unit)
-  rememberRemoved(unit)
-  if recentPlates[unit] then
-   killStats.removed=killStats.removed+1
-   if died then
-    recentPlates[unit].confirmed=true
-    local plate=recentPlates[unit].plate
-    local info=lastHits[plate]
-    if db and db.enabled and db.showKillingBlow and db.damageSource~='player'
-       and info and GetTime()-info.at<=LAST_HIT_WINDOW then
-     schedulePersonalKill(plate,GetTime())
-    end
-   end
-  end
-  plates[unit]=nil
-  plateGuids[unit]=nil
+  onNameplateRemoved(...)
  elseif event=='PARTY_KILL' then
   local attackerGUID,victimGUID=...
   notePersonalKill(attackerGUID,victimGUID)
@@ -2286,8 +2573,8 @@ engine:SetScript('OnEvent',function(_,event,...)
    noteUnitDeath(guid)
   end
  elseif event=='UNIT_COMBAT' then
-  if not db or not db.enabled or (db.damageSource~='smart' and db.damageSource~='all') then return end
-  local unit,action,descriptor,amount=...
+  if not db or not db.enabled or (db.damageSource~='coverage' and db.damageSource~='all') then return end
+  local unit,action,descriptor,amount,school=...
   -- UNIT_COMBAT announces damage TAKEN, never the attacker.
   -- Ignore normal target/softenemy aliases to prevent duplicates.
   -- Once the mob is readably dead, a soft token may be the sole late signal.
@@ -2296,10 +2583,11 @@ engine:SetScript('OnEvent',function(_,event,...)
    -- Keep the amount untouched: on Forever it may be a secret combat value.
    -- A heal on someone else or the pet is deliberately not displayed here.
    if action=='HEAL' or action=='HEALED' then
-    local anchor=playerHealAnchor()
+    local anchor=(db.damageSource=='coverage' and playerDisplay and playerDisplay:Attach('heal')) or playerHealAnchor()
     local critical=safeValue(descriptor) and descriptor=='CRITICAL'
     local ok,shown=pcall(startNumber,anchor,amount,critical,false,false,nil,true)
-    if not ok or not shown then smartStats.failed=smartStats.failed+1 end
+    if not ok or not shown then smartStats.failed=smartStats.failed+1
+    else playerTextStats.heals=playerTextStats.heals+1 end
    end
    return
   end
@@ -2339,11 +2627,39 @@ engine:SetScript('OnEvent',function(_,event,...)
     if ok and p then plate=p;plates[unit]=p end
    end
   elseif (unit=='softinteract' or unit=='softenemy' or unit=='target') then
-   local entry=findLatePlateForUnit(unit)
-   if entry then plate=entry.plate end
+   if db.damageSource=='coverage' and unit=='target' then plate=livePlateForUnit(unit) end
+   if not plate then
+    local entry=findLatePlateForUnit(unit)
+    if entry then plate=entry.plate end
+   end
   end
   if not plate then return end
-  if db.damageSource=='smart' then queueSmartHit(unit,plate,amount,critical,notice,isGlancing,blockKind)
+  local now=GetTime()
+  -- Do not treat the same target/nameplate report as two separate hits.
+  -- Prefer the nameplate token, because it stays tied to its actual target.
+  if db.damageSource=='coverage' then
+   if unit:match('^nameplate%d+$') then
+    coveragePlateEvents[plate]={at=now,action=action}
+    for i=#smartPending,1,-1 do
+     local hit=smartPending[i]
+     if hit.coverageAlias and hit.plate==plate and hit.coverageAction==action
+       and now-hit.at<=COVERAGE_ALIAS_WINDOW and now-hit.at>=0 then
+      table.remove(smartPending,i);coverageStats.aliasSkipped=coverageStats.aliasSkipped+1
+     end
+    end
+   elseif unit=='target' and coverageAliasDuplicate(plate,action,now) then
+    coverageStats.aliasSkipped=coverageStats.aliasSkipped+1
+    return
+   elseif unit=='target' then coverageStats.targetAlias=coverageStats.targetAlias+1 end
+   -- Only inspect ordinary numbers. Protected amounts must pass unchanged
+   -- to FontString:SetText() and cannot be tested for zero.
+   if not notice and safeValue(amount) and type(amount)=='number' and amount<=0 then
+    coverageStats.zeroSuppressed=coverageStats.zeroSuppressed+1
+    return
+   end
+  end
+  if db.damageSource=='coverage' then
+   queueSmartHit(unit,plate,amount,critical,notice,isGlancing,blockKind,coverageKind(school,notice),action)
   else
    local late=recentForPlate(plate)~=nil
    local ok,shown=pcall(startNumber,plate,amount,critical,false,late,notice,false,isGlancing,blockKind)
@@ -2364,6 +2680,9 @@ local function registerOptional(name)
 end
 registerOptional('COMBAT_LOG_MESSAGE')
 registerOptional('UNIT_COMBAT')
+registerOptional('PLAYER_XP_UPDATE')
+registerOptional('UNIT_SPELLCAST_SUCCEEDED')
+registerOptional('PLAYER_SWING')
 registerOptional('PARTY_KILL')
 registerOptional('UNIT_DIED')
 SLASH_SHAAENFCT1='/sfct'
@@ -2371,27 +2690,69 @@ SLASH_SHAAENFCT2='/shaaenfct'
 SlashCmdList.SHAAENFCT=function(msg)
  if not db then say('Addon not initialized.');return end
  msg=(msg or ''):lower():match('^%s*(.-)%s*$')
- if msg=='log create' or msg=='log select' or msg=='log' then
-  local filter=_G.ShaaenFCTCombatFilter
-  if not filter then say('Blizzard Combat Log filter module missing.');return end
-  local ok,created,message=pcall(filter.Activate,filter)
-  if not ok or not created then say(message or 'Unable to create/select filter. Use My Actions.');return end
-  setSource('smart');enableFilteredLog();say(message);return
+ if msg=='source coverage' or msg=='source complete' then
+  setSource('coverage');say('COVERAGE: all UNIT_COMBAT damage on tracked targets (solo best-effort); nameplate frames ON')
+  db.plateDisplayEnabled=true;return
  end
- if msg=='log status' then
-  local filter=_G.ShaaenFCTCombatFilter
-  if not filter then say('Blizzard Combat Log filter module missing.');return end
-  local ok,_,message=pcall(filter.Status,filter)
-  say(ok and message or 'Blizzard Combat Log is not ready.');return
- end
- if msg=='source smart' or msg=='source experimental' then setSource('smart');say('SMART source / make sure the Combat Log filter is My Actions');return end
+ if msg=='source smart' or msg=='source experimental' then setSource('coverage');say('SMART mode was removed; using COVERAGE.');return end
  if msg=='source player' or msg=='source moi' then setSource('player');say('Blizzard source: your damage only');return end
  if msg=='source all' or msg=='source tous' then setSource('all');say('Addon source: all damage (including other players)');return end
  if msg=='source' then say('Current source: '..db.damageSource);return end
+ if msg=='plate on' or msg=='plate off' then
+  db.plateDisplayEnabled=msg=='plate on'
+  clearNumbers()
+  say('Nameplate-attached frames: '..(db.plateDisplayEnabled and 'ON' or 'OFF'))
+  return
+ end
+ if msg=='player preview' then
+  local heal=(playerDisplay and playerDisplay:Attach('heal')) or playerHealAnchor()
+  local xp=(playerDisplay and playerDisplay:Attach('xp')) or playerHealAnchor()
+  local okA,a=pcall(startNumber,heal,1234,false,true,false,nil,true)
+  local okB,b=pcall(startNumber,xp,'+250 XP',false,true,false,nil,true,nil,nil,nil,true)
+  say('Player frames preview: heal='..tostring(okA and a)..', XP='..tostring(okB and b))
+  return
+ end
+ if msg=='plate traffic' then
+  say('COVERAGE EVENTS: physical='..coverageStats.physical..', magical='..coverageStats.magical..', unknown='..coverageStats.unknown..', log credited='..coverageStats.credited..', solo fallback='..coverageStats.soloFallback..', alias skipped='..coverageStats.aliasSkipped..', no evidence='..coverageStats.unverified)
+  say('DoT ticks are included with victim damage when available. UNIT_COMBAT alone does not reliably identify an individual DoT or its attacker.')
+  return
+ end
+ if msg=='plate status' then
+  local stats=plateDisplay and plateDisplay:Statistics() or {}
+  say('COVERAGE: physical='..coverageStats.physical..', magical='..coverageStats.magical..', unknown='..coverageStats.unknown..', log credited='..coverageStats.credited..', solo fallback='..coverageStats.soloFallback..', target alias='..coverageStats.targetAlias..', aliases ignored='..coverageStats.aliasSkipped..', zeros suppressed='..coverageStats.zeroSuppressed..', no evidence='..coverageStats.unverified..', tracked casts/swings='..coverageStats.tracked)
+ say('PLAYER FRAMES: green heals='..playerTextStats.heals..', violet XP='..playerTextStats.xp..', XP unavailable='..playerTextStats.ignored)
+ say('NAMEPLATE FRAMES: '..(db.plateDisplayEnabled and 'ON' or 'OFF')..', attached hits='..plateRenderStats.anchored..', fallback='..plateRenderStats.fallback..', created='..(stats.created or 0)..', anchors='..(stats.attached or 0)..', recycled='..(stats.reused or 0)..', errors='..(stats.failed or 0))
+  return
+ end
+ if msg=='plate preview' then
+  local targetPlate
+  for unit,plate in pairs(plates) do
+   if isUnitTarget(unit) then targetPlate=plate;break end
+  end
+  if not targetPlate and C_NamePlate and type(C_NamePlate.GetNamePlateForUnit)=='function' then
+   local ok,plate=pcall(C_NamePlate.GetNamePlateForUnit,'target')
+   if ok then targetPlate=plate end
+  end
+  local visible=targetPlate~=nil
+  if visible and targetPlate.IsShown then
+   local ok,shown=pcall(targetPlate.IsShown,targetPlate)
+   visible=ok and safeValue(shown) and shown==true
+  end
+  if visible then
+   local ok,shown=pcall(startNumber,targetPlate,1234,false,true,false)
+   if ok and shown then
+    plateRenderStats.preview=plateRenderStats.preview+1
+    say('Nameplate frame preview: 1234')
+    return
+   end
+  end
+  say('Preview unavailable: target an enemy with a visible nameplate.')
+  return
+ end
  if msg=='pet on' then db.petAssist=true;clearQueues();say('Own pet target enabled. Select My Actions in the Combat Log (include Pet and Misses).');return end
- if msg=='pet off' then db.petAssist=false;clearQueues();say('Own pet target disabled. Only your selected target is eligible in Smart mode.');return end
- if msg=='pet' then say('Own pet target: '..(db.petAssist and 'ON' or 'OFF')..'. No solo damage guessing; filtered combat-log credits required.');return end
- if msg=='status' or msg=='debug' or msg=='smart' then status();return end
+ if msg=='pet off' then db.petAssist=false;clearQueues();say('Own pet target disabled. Only your selected target is eligible for log-confirmed hits.');return end
+ if msg=='pet' then say('Own pet target: '..(db.petAssist and 'ON' or 'OFF')..'. Coverage can use solo fallback; group hits require credits.');return end
+ if msg=='status' or msg=='debug' then status();return end
  if msg=='overkilltest' or msg=='finaltest' then
   local targetPlate
   for unit,plate in pairs(plates) do
@@ -2422,6 +2783,11 @@ SlashCmdList.SHAAENFCT=function(msg)
    window:Show()
   else createWindow():Show() end
   say('Settings scale and opacity restored to 100%.')
+  return
+ end
+ if msg=='center' or msg=='open center' or msg=='minimap open' then
+  local ok,err=pcall(openSettingsCentered)
+  if not ok then say('Unable to open settings: '..tostring(err)) end
   return
  end
  if msg=='open' or msg=='options' then createWindow():Show();return end

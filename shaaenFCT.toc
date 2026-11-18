@@ -1,10 +1,11 @@
 ## Interface: 16001
 ## Title: shaaenFCT
-## Notes: Personal floating combat text with Smart filtering, four animation styles, per-style direction, independent offsets and a searchable font picker.
-## Version: 0.7.30
+## Notes: Personal floating combat text with Coverage filtering, four animation styles, per-style direction, independent offsets and a searchable font picker.
+## Version: 0.7.45
 ## SavedVariables: shaaenFCTDB
 Libs/FontMedia.lua
 Fonts/CustomFonts.lua
-CombatFilter.lua
+NameplateDisplay.lua
+PlayerDisplay.lua
 Core.lua
 Integration.lua
