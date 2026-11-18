@@ -1,0 +1,64 @@
+name: Publish ShaaenFCT v0.7.30
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v0.7.30.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'NLshaen/ShaaenFCT'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out v0.7.30 source
+        uses: actions/checkout@v4
+        with:
+          ref: 5eddb7f1d06a190ec6f78459dc1c1ef323de3a0c
+
+      - name: Build ShaaenFCT release ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^## Version: 0.7.30$' shaaenFCT.toc
+          grep -q '^CombatFilter.lua$' shaaenFCT.toc
+          test -f CombatFilter.lua
+          mkdir -p staging/shaaenFCT
+          cp -R Core.lua CombatFilter.lua Integration.lua shaaenFCT.toc README.txt Fonts Libs staging/shaaenFCT/
+          (cd staging && zip -qr "$GITHUB_WORKSPACE/ShaaenFCT_v0.7.30.zip" shaaenFCT)
+          unzip -t ShaaenFCT_v0.7.30.zip
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'NOTES'
+          ## Ajouts
+          - Filtre de combat Blizzard nommé **ShaaenFCT**, à créer et sélectionner volontairement depuis Settings > General.
+          - Affichage ciblé des dégâts et coups manqués du joueur et du familier, avec horodatage.
+          - Commandes `/sfct log create` et `/sfct log status`.
+          - Repli vers le filtre Blizzard My Actions si l'API du client est indisponible.
+
+          ## Notes
+          - WoW Forever restreint l'accès aux événements de combat bruts. Ce filtre améliore l'affichage du journal sans contourner ces restrictions.
+          - Le filtre n'est pas créé automatiquement au chargement, et sa modification est refusée pendant le combat.
+
+          ## Commit
+          - [5eddb7f](https://github.com/NLshaen/ShaaenFCT/commit/5eddb7f1d06a190ec6f78459dc1c1ef323de3a0c)
+          NOTES
+          if gh release view v0.7.30 --repo NLshaen/ShaaenFCT >/dev/null 2>&1; then
+            gh release upload v0.7.30 ShaaenFCT_v0.7.30.zip --repo NLshaen/ShaaenFCT --clobber
+            gh release edit v0.7.30 --repo NLshaen/ShaaenFCT --title "ShaaenFCT_v0.7.30" --notes-file release-notes.md
+          else
+            gh release create v0.7.30 ShaaenFCT_v0.7.30.zip \
+              --repo NLshaen/ShaaenFCT \
+              --target 5eddb7f1d06a190ec6f78459dc1c1ef323de3a0c \
+              --title "ShaaenFCT_v0.7.30" \
+              --notes-file release-notes.md \
+              --latest
+          fi
