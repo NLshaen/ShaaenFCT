@@ -1,10 +1,14 @@
 name: Notify Discord on Release
 
 on:
-  # Wait until the existing workflow has finalized the release changelog.
+  # Both manual/PAT and GITHUB_TOKEN publications are announced after
+  # the release changelog workflow completes.
   workflow_run:
     workflows: [Update Release changelog]
     types: [completed]
+  # Fallback for future versioned publishers, with no duplicate notices.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
   # Manually re-send a release announcement when needed.
   workflow_dispatch:
     inputs:
@@ -12,9 +16,14 @@ on:
         description: 'Release tag (leave blank for latest stable release)'
         required: false
         type: string
+      force:
+        description: 'Re-send even if already notified'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: discord-release-notification
@@ -41,4 +50,5 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           RELEASE_TAG: ${{ inputs.tag }}
+          FORCE_NOTIFY: ${{ inputs.force || 'false' }}
         run: python3 .github/scripts/notify_discord_release.py

@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 
 REPOSITORY = "NLshaen/ShaaenFCT"
 TAG_PATTERN = re.compile(r"v\d+\.\d+\.\d+")
+MARKER_PREFIX = "ShaaenFCT:discord-notified:"
 
 
 def get_release(token, tag):
@@ -26,6 +27,31 @@ def get_release(token, tag):
     )
     with urlopen(request, timeout=20) as response:
         return json.load(response)
+
+
+
+def mark_notified(token, release, marker_text):
+    # Reload release notes before changing them, preserving changelog edits.
+    latest = get_release(token, release["tag_name"])
+    previous = latest.get("body") or ""
+    if marker_text in previous:
+        return
+    updated = previous.rstrip() + "\n\n" + marker_text + "\n"
+    request = Request(
+        f"https://api.github.com/repos/{REPOSITORY}/releases/{release['id']}",
+        data=json.dumps({"body": updated}, ensure_ascii=False).encode("utf-8"),
+        method="PATCH",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json; charset=utf-8",
+            "User-Agent": "ShaaenFCT-Discord-Release",
+        },
+    )
+    with urlopen(request, timeout=20) as response:
+        if response.status != 200:
+            sys.exit(f"Unable to mark GitHub Release as notified: {response.status}")
 
 
 def discord_payload(release):
@@ -90,6 +116,13 @@ def main():
     if release.get("draft") or release.get("prerelease"):
         print(f"Skipping draft/prerelease {release['tag_name']}")
         return
+    if not TAG_PATTERN.fullmatch(release["tag_name"]):
+        sys.exit("Skipping unrecognized release tag")
+    marker_text = f"<!-- {MARKER_PREFIX}{release['tag_name']} -->"
+    force = os.environ.get("FORCE_NOTIFY", "false").lower() in {"true", "yes", "1"}
+    if marker_text in (release.get("body") or "") and not force:
+        print(f"Discord already notified for {release['tag_name']}; skipping duplicate")
+        return
 
     payload = json.dumps(discord_payload(release), ensure_ascii=False).encode("utf-8")
     request = Request(
@@ -125,6 +158,7 @@ def main():
     except URLError as error:
         sys.exit(f"Discord connection error: {error.reason}")
 
+    mark_notified(token, release, marker_text)
     print(f"Posted {release['tag_name']} changelog to Discord")
 
 

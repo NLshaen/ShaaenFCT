@@ -1,0 +1,49 @@
+name: Cleanup old ShaaenFCT publications
+
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: [Update Release changelog]
+    types: [completed]
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview without deleting anything'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: cleanup-publish-history
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: >-
+      github.repository == 'NLshaen/ShaaenFCT' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event != 'push'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out cleanup script
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Prune old releases and completed publish runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          KEEP_RELEASES: ${{ vars.SHAAEN_KEEP_RELEASES || '3' }}
+          KEEP_PUBLISH_RUNS: ${{ vars.SHAAEN_KEEP_PUBLISH_RUNS || '5' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python3 .github/scripts/cleanup_publish_history.py
