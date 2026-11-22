@@ -1789,7 +1789,7 @@ local function createWindow()
   if key=='windowScale' then w._scaleSlider=slider else w._opacitySlider=slider end
  end
  topSlider('windowScale','SCALE',75,120,function(n) w:SetScale(n/100) end)
- topSlider('windowOpacity','OPACITY',0,100,function(n) w:SetAlpha(n/100) end)
+ topSlider('windowOpacity','OPACITY',30,100,function(n) w:SetAlpha(n/100) end)
  local function positionTopSliders()
   local available=math.max(420,(w:GetWidth() or minWidth)-299)
   local gap=22
@@ -2581,7 +2581,7 @@ engine:SetScript('OnEvent',function(_,event,...)
   if type(db.windowScale)~='number' or db.windowScale~=db.windowScale then db.windowScale=100 end
   db.windowScale=math.max(75,math.min(120,math.floor(db.windowScale+.5)))
   if type(db.windowOpacity)~='number' or db.windowOpacity~=db.windowOpacity then db.windowOpacity=100 end
-  db.windowOpacity=math.max(0,math.min(100,math.floor(db.windowOpacity+.5)))
+  db.windowOpacity=math.max(30,math.min(100,math.floor(db.windowOpacity+.5)))
   for _,field in ipairs({'direction','popupDirection','floatDirection','bounceDirection'}) do
    if db[field]~='alternate' and db[field]~='left' and db[field]~='right' and db[field]~='random' then
     db[field]='alternate'
