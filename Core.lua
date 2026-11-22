@@ -129,6 +129,7 @@ local defaults = {
  outline=true, size=27, critScale=1.5, duration=.9, startY=22,
  rise=65, arc=65, curve=40, fade=55, direction='alternate', animationStyle='arc',
  popupDirection='alternate', floatDirection='alternate', bounceDirection='alternate',
+ verticalDirection='up', popupVerticalDirection='up', floatVerticalDirection='up', bounceVerticalDirection='up',
  -- Pixel offsets are independent for each animation style and hit category.
  arcNormalX=0, arcNormalY=0, arcCritX=0, arcCritY=0,
  popupNormalX=0, popupNormalY=0, popupCritX=0, popupCritY=0,
@@ -571,6 +572,10 @@ local function anchorNumber(fs,hit,x,y)
 end
 -- All trajectory arithmetic uses user configuration and elapsed time only.
 -- Protected damage values never enter this function.
+local function verticalMotionY(hit,value)
+ local start=hit.startY or 0
+ return start+(value-start)*(hit.vdir or 1)
+end
 local function profileMotionAt(hit,p)
  local mode=hit.mode or 'arc'
  if mode=='popup' then
@@ -588,20 +593,20 @@ local function profileMotionAt(hit,p)
    scale=1+(peak-1)*(1-t)*(1-t)
   end
   local travel=1-(1-p)*(1-p)
-  return hit.dir*(hit.travel or 0)*travel,hit.startY+hit.rise*travel,scale
+  return hit.dir*(hit.travel or 0)*travel,verticalMotionY(hit,hit.startY+hit.rise*travel),scale
  elseif mode=='float' then
   local travel=1-math.pow(1-p,1.55)
   local sway=math.sin(p*math.pi*3)*(hit.sway or 0)*(1-p*.25)
-  return hit.dir*((hit.drift or 0)*p+sway),hit.startY+hit.rise*travel,1
+  return hit.dir*((hit.drift or 0)*p+sway),verticalMotionY(hit,hit.startY+hit.rise*travel),1
  elseif mode=='bounce' then
   local decay=hit.decay or 3
   local bounce=math.abs(math.sin(3.5*math.pi*p))*math.exp(-decay*p)
   local travel=1-math.exp(-4*p)
   local lift=hit.rise*travel+hit.rise*.4*bounce
   local scale=1+((hit.peak or 1.5)-1)*bounce
-  return hit.dir*(hit.travel or 0)*(.75*p+.25*bounce),hit.startY+lift,scale
+  return hit.dir*(hit.travel or 0)*(.75*p+.25*bounce),verticalMotionY(hit,hit.startY+lift),scale
  else
-  return hit.dir*hit.arc*p,hit.startY+hit.rise*p+hit.curve*4*p*(1-p),1
+  return hit.dir*hit.arc*p,verticalMotionY(hit,hit.startY+hit.rise*p+hit.curve*4*p*(1-p)),1
  end
 end
 -- Apply positional offsets to every style, whether attached to a nameplate
@@ -905,6 +910,12 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
  elseif choice=='right' then dir=1
  elseif choice=='random' then dir=(math.random(2)==1) and -1 or 1
  else dir=(directionIndex%2==0) and 1 or -1 end
+ local verticalKey=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'})[mode] or 'verticalDirection'
+ local verticalChoice=db[verticalKey] or 'up'
+ local vdir=1
+ if verticalChoice=='down' then vdir=-1
+ elseif verticalChoice=='alternate' then vdir=(directionIndex%2==0) and 1 or -1
+ elseif verticalChoice=='random' then vdir=(math.random(2)==1) and 1 or -1 end
  local duration,startY,rise,arc,curve,fade=db.duration,db.startY,db.rise,db.arc,db.curve,db.fade
  local peak,intro,hold,drift,sway,decay,travel
  if mode=='popup' then
@@ -920,7 +931,7 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
   travel=db.bounceTravel
  else mode='arc' end
  fs:SetAlpha(1);fs:Show()
- local hit={fs=fs,plate=plate,anchor=anchor,position=position,detached=detached,heal=isHeal,t=0,dir=dir,mode=mode,
+ local hit={fs=fs,plate=plate,anchor=anchor,position=position,detached=detached,heal=isHeal,t=0,dir=dir,vdir=vdir,mode=mode,
   duration=duration,startY=startY,rise=rise,arc=arc,curve=curve,fade=fade,
   peak=peak,intro=intro,hold=hold,drift=drift,sway=sway,decay=decay,travel=travel,
   offsetX=offsetX,offsetY=offsetY,
@@ -2021,6 +2032,7 @@ local function createWindow()
    tintTexture(b._skinHover,skin.hover)
   end
   markTabs()
+  if animationPreview and animationPreview.ApplyTheme then animationPreview:ApplyTheme() end
  end
  for i,entry in ipairs(styleEntries) do
   local key,name,description=entry[1],entry[2],entry[3]
@@ -2061,7 +2073,7 @@ local function createWindow()
  }
  local animationSliders={}
  if _G.ShaaenFCTAnimationPreview then
-  animationPreview=_G.ShaaenFCTAnimationPreview:Create(animation,function() return db end,setFont,motionAt,fadeAt)
+  animationPreview=_G.ShaaenFCTAnimationPreview:Create(animation,function() return db end,setFont,motionAt,fadeAt,currentUISkin)
  end
  local function anchorTopLeft(widget,parent,x,y)
   widget:ClearAllPoints()
@@ -2155,21 +2167,25 @@ local function createWindow()
   animationSliders[key]={slider=slider,edit=input}
  end
  local profiles={
-  arc={'duration','startY','rise','arc','curve','fade','direction'},
-  popup={'popupDuration','popupStartY','popupRise','popupPeak','popupIn','popupHold','popupFade','popupTravel','popupDirection'},
-  float={'floatDuration','floatStartY','floatRise','floatDrift','floatSway','floatFade','floatDirection'},
-  bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection'}
+  arc={'duration','startY','rise','arc','curve','fade','direction','verticalDirection'},
+  popup={'popupDuration','popupStartY','popupRise','popupPeak','popupIn','popupHold','popupFade','popupTravel','popupDirection','popupVerticalDirection'},
+  float={'floatDuration','floatStartY','floatRise','floatDrift','floatSway','floatFade','floatDirection','floatVerticalDirection'},
+  bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'}
  }
  for style,keys in pairs(profiles) do
   for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
    keys[#keys+1]=style..suffix
   end
  end
+ local directionMenus={}
  local function selectAnimationStyle(key)
   db.animationStyle=key
   if animationPreview then animationPreview:Refresh(true) end
   for name,p in pairs(subTabs) do
    if name==key then p:Show() else p:Hide() end
+  end
+  for _,entries in pairs(directionMenus or {}) do
+   for _,item in pairs(entries) do item.popup:Hide() end
   end
   for name,b in pairs(subButtons) do
    local chosen=name==key
@@ -2198,8 +2214,7 @@ local function createWindow()
   rightLabel(p,'CRITICAL DAMAGE / POSITION',475,-475,10,1,.63,.35)
   compactSlider(p,key..'CritX','Offset X',475,-499,' px',true)
   compactSlider(p,key..'CritY','Offset Y',475,-536,' px',true)
-  rightLabel(p,'X: left (-) / right (+)',475,-578,10,.63,.67,.72)
-  rightLabel(p,'Y: down (-) / up (+)',475,-592,10,.63,.67,.72)
+  rightLabel(p,'Signed offsets: X = horizontal / Y = vertical',475,-570,9,.63,.67,.72)
  end
  local arcPane=subTabs.arc
  compactSlider(arcPane,'duration','Duration',222,-403,' s')
@@ -2208,37 +2223,59 @@ local function createWindow()
  compactSlider(arcPane,'arc','Horizontal travel',222,-514,' px')
  compactSlider(arcPane,'curve','Arc curve',222,-551,' px')
  compactSlider(arcPane,'fade','Fade starts at',222,-588,' %')
- -- Direction controls are separate for every profile and do not affect X/Y offsets.
+ -- Horizontal and vertical direction selectors for each animation profile.
+ -- Dropdown menus open upwards, so the 760px minimum window does not clip them.
  local directionFields={arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'}
- local directionButtons={}
- local directionLabels={left='LEFT',right='RIGHT',alternate='ALTERNATE',random='RANDOM'}
+ local verticalFields={arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'}
  local function redrawDirection(style)
-  local field=directionFields[style]
-  for key,b in pairs(directionButtons[style] or {}) do
-   local selected=db[field]==key
-   b.caption:SetText(directionLabels[key])
-   b.caption:SetTextColor(selected and 1 or .72,selected and .68 or .75,selected and .38 or .80)
+  for _,entry in pairs(directionMenus[style] or {}) do
+   local value=db[entry.field] or entry.default
+   entry.trigger.caption:SetText(entry.title..': '..string.upper(value))
   end
  end
  for _,style in ipairs({'arc','popup','float','bounce'}) do
   local parent=subTabs[style]
-  directionButtons[style]={}
-  rightLabel(parent,'HORIZONTAL DIRECTION',475,-610,10,1,.63,.35)
-  for i,key in ipairs({'left','right','alternate','random'}) do
-   local col=(i-1)%2
-   local row=math.floor((i-1)/2)
-   directionButtons[style][key]=button(parent,'',475+col*125,-628-row*33,118,28,function()
-    db[directionFields[style]]=key
-    redrawDirection(style)
-    if animationPreview then animationPreview:Refresh(false) end
+  directionMenus[style]={}
+  local function makeSelector(axis,title,field,y,options,default)
+   local trigger=button(parent,'',475,y,238,31,function() end)
+   trigger.caption:ClearAllPoints()
+   trigger.caption:SetPoint('LEFT',trigger,'LEFT',10,0)
+   trigger.caption:SetJustifyH('LEFT')
+   local arrow=trigger:CreateFontString(nil,'OVERLAY','GameFontNormalSmall')
+   arrow:SetPoint('RIGHT',trigger,'RIGHT',-10,0)
+   arrow:SetText('▼')
+   local popup=CreateFrame('Frame',nil,w)
+   popup:SetFrameStrata('TOOLTIP')
+   popup:SetSize(238,112)
+   popup:SetPoint('BOTTOMLEFT',trigger,'TOPLEFT',0,3)
+   popup:SetPoint('BOTTOMRIGHT',trigger,'TOPRIGHT',0,3)
+   colorTexture(popup,.105,.125,.16,.99)
+   local optionButtons={}
+   for i,key in ipairs(options) do
+    local row=button(popup,string.upper(key),8,-8-(i-1)*25,220,24,function()
+     db[field]=key;popup:Hide();redrawDirection(style)
+     if animationPreview then animationPreview:Refresh(true) end
+    end)
+    row:SetPoint('TOPRIGHT',popup,'TOPRIGHT',-8,-8-(i-1)*25)
+    optionButtons[#optionButtons+1]=row
+   end
+   popup:Hide()
+   trigger:SetScript('OnClick',function()
+    local visible=popup:IsShown()
+    for _,entries in pairs(directionMenus) do
+     for _,item in pairs(entries) do item.popup:Hide() end
+    end
+    if not visible then popup:Show() end
    end)
-   local directionButton=directionButtons[style][key]
    addResponsive(function(extra)
-    local buttonWidth=118+extra/4
-    directionButton:SetWidth(buttonWidth)
-    anchorTopLeft(directionButton,parent,475+extra/2+col*(buttonWidth+7),-628-row*33)
+    local shift=extra/2
+    anchorTopLeft(trigger,parent,475+shift,y)
+    trigger:SetWidth(238+extra/2)
    end)
+   directionMenus[style][axis]={field=field,trigger=trigger,popup=popup,title=title,default=default}
   end
+  makeSelector('horizontal','HORIZONTAL',directionFields[style],-598,{'left','right','alternate','random'},'alternate')
+  makeSelector('vertical','VERTICAL',verticalFields[style],-651,{'up','down','alternate','random'},'up')
   redrawDirection(style)
  end
  local popupPane=subTabs.popup
@@ -2533,6 +2570,9 @@ engine:SetScript('OnEvent',function(_,event,...)
    if db[field]~='alternate' and db[field]~='left' and db[field]~='right' and db[field]~='random' then
     db[field]='alternate'
    end
+  end
+  for _,field in ipairs({'verticalDirection','popupVerticalDirection','floatVerticalDirection','bounceVerticalDirection'}) do
+   if db[field]~='up' and db[field]~='down' and db[field]~='alternate' and db[field]~='random' then db[field]='up' end
   end
   if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' then db.animationStyle='arc' end
   -- v0.7.42 removes the selectable Smart mode. Keep player / all choices.

@@ -24,10 +24,14 @@ local function profile(db,critical)
  local mode=db.animationStyle or 'arc'
  local directionField=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'})[mode] or 'direction'
  local direction=db[directionField] or 'alternate'
+ local verticalField=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'})[mode] or 'verticalDirection'
+ local vChoice=db[verticalField] or 'up'
+ local vdir=(vChoice=='down' or (vChoice=='alternate' and critical)) and -1 or 1
+ if vChoice=='random' then vdir=math.random(2)==1 and 1 or -1 end
  local dir=critical and 1 or -1
  if direction=='left' then dir=-1 elseif direction=='right' then dir=1
  elseif direction=='random' then dir=math.random(2)==1 and -1 or 1 end
- local hit={mode=mode,dir=dir,offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0,
+ local hit={mode=mode,dir=dir,vdir=vdir,offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0,
   offsetY=db[mode..(critical and 'CritY' or 'NormalY')] or 0}
  if mode=='popup' then
   hit.duration=db.popupDuration;hit.startY=db.popupStartY;hit.rise=db.popupRise
@@ -47,12 +51,12 @@ local function profile(db,critical)
  return hit
 end
 
-function Preview:Create(parent,getDB,setCombatFont,motionAt,fadeAt)
+function Preview:Create(parent,getDB,setCombatFont,motionAt,fadeAt,getTheme)
  local stage=CreateFrame('Frame',nil,parent)
  stage:SetPoint('TOPLEFT',parent,'TOPLEFT',220,-159)
  stage:SetPoint('TOPRIGHT',parent,'TOPRIGHT',-36,-159)
  stage:SetHeight(94)
- colored(stage,.098,.112,.139,.97)
+ local background=colored(stage,.098,.112,.139,.97)
  local border=stage:CreateTexture(nil,'ARTWORK')
  border:SetPoint('TOPLEFT',stage,'TOPLEFT',0,0)
  border:SetPoint('TOPRIGHT',stage,'TOPRIGHT',0,0)
@@ -75,6 +79,20 @@ function Preview:Create(parent,getDB,setCombatFont,motionAt,fadeAt)
  local crit=makeText(stage,'12840',35,1,.86,.12)
  local info=makeText(stage,'',9,.62,.68,.76)
  info:SetPoint('BOTTOM',stage,'BOTTOM',0,4)
+ -- Theme colors tint the preview frame and labels, not the combat numbers.
+ function stage:ApplyTheme()
+  if not getTheme then return end
+  local theme=getTheme()
+  if not theme then return end
+  local c=theme.sidebar or theme.window or {.10,.11,.14}
+  if background.SetColorTexture then background:SetColorTexture(c[1],c[2],c[3],.99) end
+  local accent=theme.accent or {1,.59,.30}
+  if border.SetColorTexture then border:SetColorTexture(accent[1],accent[2],accent[3],1) end
+  heading:SetTextColor(accent[1],accent[2],accent[3])
+  help:SetTextColor(.75,.80,.86)
+  critHelp:SetTextColor(.86,.80,.88)
+  info:SetTextColor(.72,.75,.82)
+ end
  local samples={normal,crit}
  local hits={}
  stage.elapsed=0
@@ -83,6 +101,7 @@ function Preview:Create(parent,getDB,setCombatFont,motionAt,fadeAt)
  function stage:Refresh(restart)
   local db=getDB()
   if not db then return end
+  self:ApplyTheme()
   hits[1]=profile(db,false)
   hits[2]=profile(db,true)
   -- Large configured sizes are reduced to fit within the panel; font faces,
