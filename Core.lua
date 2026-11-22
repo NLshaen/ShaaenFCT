@@ -1594,10 +1594,7 @@ local function createWindow()
  resizeGrip:SetSize(24,24);resizeGrip:SetPoint('BOTTOMRIGHT',w,'BOTTOMRIGHT',-2,2)
  if resizeGrip.SetFrameLevel and w.GetFrameLevel then resizeGrip:SetFrameLevel(w:GetFrameLevel()+30) end
  resizeGrip:EnableMouse(true);resizeGrip:RegisterForDrag('LeftButton')
- for index=1,3 do
-  local gripDot=fixedTexture(resizeGrip,'BOTTOMRIGHT',-(index*5),index*5,3,3,1,.59,.29,.85)
-  uiAccentTextures[#uiAccentTextures+1]=gripDot
- end
+ -- The invisible 24px corner handle remains usable without ornamental dots.
  resizeGrip:SetScript('OnDragStart',function(self)
   if not (InCombatLockdown and InCombatLockdown()) then self:GetParent():StartSizing('BOTTOMRIGHT') end
  end)
@@ -1984,7 +1981,7 @@ local function createWindow()
  end
  label(typeface,'WHITE  /  NORMAL',220,-637,10,.67,.72,.78)
  label(typeface,'YELLOW  /  CRITICAL',481,-637,10,.67,.72,.78)
- label(typeface,'Custom fonts: Fonts/CustomFonts.lua  ·  Also supports LibSharedMedia packs.',220,-665,10,.61,.65,.71)
+ label(typeface,'Custom fonts: Fonts/CustomFonts.lua  /  LibSharedMedia packs supported.',220,-665,10,.61,.65,.71)
  refreshFonts=function()
   for _,redraw in pairs(fontSelectors) do redraw() end
   outline:RefreshSwitch(db.outline)
@@ -2045,7 +2042,7 @@ local function createWindow()
    local selected=(db.uiColorStyle==key)
    local color=UI_COLOR_STYLES[key].accent
    tintTexture(entry.swatch,color)
-   entry.button.caption:SetText((selected and '●  ' or '○  ')..entry.name)
+   entry.button.caption:SetText(entry.name)
    local c=selected and skin.soft or {.87,.90,.94}
    entry.button.caption:SetTextColor(c[1],c[2],c[3])
    tintTexture(entry.button.stripe,selected and skin.accent or {.29,.34,.39})
@@ -2219,7 +2216,7 @@ local function createWindow()
   local field=directionFields[style]
   for key,b in pairs(directionButtons[style] or {}) do
    local selected=db[field]==key
-   b.caption:SetText((selected and '● ' or '○ ')..directionLabels[key])
+   b.caption:SetText(directionLabels[key])
    b.caption:SetTextColor(selected and 1 or .72,selected and .68 or .75,selected and .38 or .80)
   end
  end
