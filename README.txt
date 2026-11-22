@@ -1,4 +1,31 @@
-shaaenFCT 0.7.46 | WoW Forever (live version in menu footer)
+shaaenFCT 0.7.47 | WoW Forever (Interface 16001)
+===================================
+
+LOCAL FEATURE BRANCH 0.7.47  (not pushed to GitHub)
+- Settings > General: clickable on/off switches for addon, Coverage,
+  Blizzard, All, Combat Log, own-pet target tracking and Overkill. Combat
+  sources are mutually exclusive; turning off a selected source switches to
+  another source rather than leaving an invalid mode.
+- Combat Log OFF disables protected log credit matching, not the game's own
+  Combat Log window or Coverage's best-effort solo victim event routing.
+- Overkill duration is labelled Overkill; intensity uses a 0-100% slider.
+  Previously saved presets light/medium/strong migrate to 25/50/85%.
+- Settings > Fonts: outline is an on/off switch. Font pickers use explicit
+  right-hand dropdown arrows and retain searchable font lists.
+- Decorative bullet/diamond selection marks and resize-grip dots removed.
+- Animation: in-panel font preview uses the selected Settings color theme
+  for its panel and labels (combat font colors remain white/yellow). Each
+  Arc/Popup/Float/Bounce profile now has independent horizontal and vertical
+  dropdowns with UP/DOWN/ALTERNATE/RANDOM options for vertical motion.
+- About: guild Discord link is https://discord.gg/T6dYnaPsh; select link
+  and copy with Ctrl+C. The link is displayed, not auto-opened.
+- Coverage: incoming green player heals render +[amount] HP using separate
+  prefix and suffix FontStrings around the unmodified amount. This keeps
+  WoW Forever secret combat numbers safe. XP stays violet.
+- Six feature commits plus a pet tracking correction and release metadata.
+  Built from the locally committed animation preview on top of v0.7.45.
+
+HISTORICAL NOTES FROM 0.7.46 | Previous versions
 ===================================
 
 ANIMATION LIVE FONT PREVIEW (0.7.46)
