@@ -1,6 +1,18 @@
-shaaenFCT 0.7.45 | WoW Forever (live version in menu footer)
+shaaenFCT 0.7.46 | WoW Forever (live version in menu footer)
 ===================================
 
+ANIMATION LIVE FONT PREVIEW (0.7.46)
+- The Animation tab now has an integrated dark preview panel directly above
+  RESET THIS STYLE and PREVIEW STYLE. It shows normal white and critical yellow
+  damage values using the active fonts, font outline and critical size ratio.
+- The preview animates in the current Arc / Popup / Float / Bounce style using
+  the same motionAt/fadeAt code as actual in-game combat numbers. It refreshes
+  when animation style, direction, profile sliders or fonts are updated.
+- Trajectory travel and large font sizes are scaled to fit the small preview.
+  PREVIEW STYLE still shows the full-size animation in the game world.
+- The Animation layout is compacted so the eight Popup sliders remain above
+  the bottom action bar. No combat attribution or damage logic was changed.
+- Local test build only; not pushed to GitHub.
 
 HISTORICAL VERSION NOTES (0.7.40 and earlier)
 The sections below describe previous versions, including the removed Smart mode.

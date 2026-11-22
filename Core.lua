@@ -1613,7 +1613,7 @@ local function createWindow()
  local animation=addTab('animation')
  local about=addTab('about')
  local help=addTab('help')
- local refreshGeneral,refreshFonts,refreshStyle
+ local refreshGeneral,refreshFonts,refreshStyle,animationPreview
  local settingsBar=CreateFrame('Frame',nil,w)
  settingsBar:SetPoint('TOPLEFT',w,'TOPLEFT',213,-78)
  settingsBar:SetPoint('TOPRIGHT',w,'TOPRIGHT',-35,-78)
@@ -1642,6 +1642,7 @@ local function createWindow()
   if chosen=='general' and refreshGeneral then refreshGeneral() end
   if chosen=='fonts' and refreshFonts then refreshFonts() end
   if chosen=='style' and refreshStyle then refreshStyle() end
+  if chosen=='animation' and animationPreview then animationPreview:Refresh(true) end
  end
  local function selectTab(key)
   mainPage=key
@@ -2065,6 +2066,9 @@ local function createWindow()
   bounce='Springy rise with damping and directional drift'
  }
  local animationSliders={}
+ if _G.ShaaenFCTAnimationPreview then
+  animationPreview=_G.ShaaenFCTAnimationPreview:Create(animation,function() return db end,setFont,motionAt,fadeAt)
+ end
  local function anchorTopLeft(widget,parent,x,y)
   widget:ClearAllPoints()
   widget:SetPoint('TOPLEFT',parent,'TOPLEFT',x,y)
@@ -2125,6 +2129,7 @@ local function createWindow()
    local v=math.floor(num/r[3]+.5)*r[3]
    v=math.max(r[1],math.min(r[2],v))
    db[key]=math.floor(v*1000+.5)/1000
+   if animationPreview then animationPreview:Refresh(false) end
    local formatted=string.format('%.'..r[4]..'f',db[key])
    if input then
     if not input:HasFocus() then input:SetText(formatted) end
@@ -2168,6 +2173,7 @@ local function createWindow()
  end
  local function selectAnimationStyle(key)
   db.animationStyle=key
+  if animationPreview then animationPreview:Refresh(true) end
   for name,p in pairs(subTabs) do
    if name==key then p:Show() else p:Hide() end
   end
@@ -2179,35 +2185,35 @@ local function createWindow()
  end
  for idx,key in ipairs({'arc','popup','float','bounce'}) do
   local x=216+(idx-1)*127
-  subButtons[key]=button(animation,subNames[key],x,-209,119,34,function() selectAnimationStyle(key) end)
+  subButtons[key]=button(animation,subNames[key],x,-306,119,34,function() selectAnimationStyle(key) end)
   local animButton=subButtons[key]
   addResponsive(function(extra)
    local width=(500+extra-24)/4
    animButton:SetSize(width,34)
-   anchorTopLeft(animButton,animation,216+(idx-1)*(width+8),-209)
+   anchorTopLeft(animButton,animation,216+(idx-1)*(width+8),-306)
   end)
   local p=CreateFrame('Frame',nil,animation)
   p:SetAllPoints(animation);p:Hide();subTabs[key]=p
-  label(p,subDescriptions[key],220,-252,11,.67,.71,.77)
-  local separator=fixedTexture(p,'TOPLEFT',460,-278,1,312,.25,.28,.33,.8)
-  addResponsive(function(extra) anchorTopLeft(separator,p,460+extra/2,-278) end)
-  label(p,'MOTION / TIMING',222,-280,11,1,.63,.35)
-  rightLabel(p,'NORMAL DAMAGE / POSITION',475,-280,10,1,.63,.35)
-  compactSlider(p,key..'NormalX','Offset X',475,-312,' px',true)
-  compactSlider(p,key..'NormalY','Offset Y',475,-355,' px',true)
-  rightLabel(p,'CRITICAL DAMAGE / POSITION',475,-421,10,1,.63,.35)
-  compactSlider(p,key..'CritX','Offset X',475,-453,' px',true)
-  compactSlider(p,key..'CritY','Offset Y',475,-496,' px',true)
-  rightLabel(p,'X: left (-) / right (+)',475,-546,10,.63,.67,.72)
-  rightLabel(p,'Y: down (-) / up (+)',475,-563,10,.63,.67,.72)
+  label(p,subDescriptions[key],220,-352,11,.67,.71,.77)
+  local separator=fixedTexture(p,'TOPLEFT',460,-378,1,322,.25,.28,.33,.8)
+  addResponsive(function(extra) anchorTopLeft(separator,p,460+extra/2,-378) end)
+  label(p,'MOTION / TIMING',222,-382,11,1,.63,.35)
+  rightLabel(p,'NORMAL DAMAGE / POSITION',475,-382,10,1,.63,.35)
+  compactSlider(p,key..'NormalX','Offset X',475,-403,' px',true)
+  compactSlider(p,key..'NormalY','Offset Y',475,-440,' px',true)
+  rightLabel(p,'CRITICAL DAMAGE / POSITION',475,-475,10,1,.63,.35)
+  compactSlider(p,key..'CritX','Offset X',475,-499,' px',true)
+  compactSlider(p,key..'CritY','Offset Y',475,-536,' px',true)
+  rightLabel(p,'X: left (-) / right (+)',475,-578,10,.63,.67,.72)
+  rightLabel(p,'Y: down (-) / up (+)',475,-592,10,.63,.67,.72)
  end
  local arcPane=subTabs.arc
- compactSlider(arcPane,'duration','Duration',222,-310,' s')
- compactSlider(arcPane,'startY','Starting height',222,-353,' px')
- compactSlider(arcPane,'rise','Vertical rise',222,-396,' px')
- compactSlider(arcPane,'arc','Horizontal travel',222,-439,' px')
- compactSlider(arcPane,'curve','Arc curve',222,-482,' px')
- compactSlider(arcPane,'fade','Fade starts at',222,-525,' %')
+ compactSlider(arcPane,'duration','Duration',222,-403,' s')
+ compactSlider(arcPane,'startY','Starting height',222,-440,' px')
+ compactSlider(arcPane,'rise','Vertical rise',222,-477,' px')
+ compactSlider(arcPane,'arc','Horizontal travel',222,-514,' px')
+ compactSlider(arcPane,'curve','Arc curve',222,-551,' px')
+ compactSlider(arcPane,'fade','Fade starts at',222,-588,' %')
  -- Direction controls are separate for every profile and do not affect X/Y offsets.
  local directionFields={arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'}
  local directionButtons={}
@@ -2223,48 +2229,49 @@ local function createWindow()
  for _,style in ipairs({'arc','popup','float','bounce'}) do
   local parent=subTabs[style]
   directionButtons[style]={}
-  rightLabel(parent,'HORIZONTAL DIRECTION',475,-587,10,1,.63,.35)
+  rightLabel(parent,'HORIZONTAL DIRECTION',475,-610,10,1,.63,.35)
   for i,key in ipairs({'left','right','alternate','random'}) do
    local col=(i-1)%2
    local row=math.floor((i-1)/2)
-   directionButtons[style][key]=button(parent,'',475+col*125,-605-row*33,118,28,function()
+   directionButtons[style][key]=button(parent,'',475+col*125,-628-row*33,118,28,function()
     db[directionFields[style]]=key
     redrawDirection(style)
+    if animationPreview then animationPreview:Refresh(false) end
    end)
    local directionButton=directionButtons[style][key]
    addResponsive(function(extra)
     local buttonWidth=118+extra/4
     directionButton:SetWidth(buttonWidth)
-    anchorTopLeft(directionButton,parent,475+extra/2+col*(buttonWidth+7),-605-row*33)
+    anchorTopLeft(directionButton,parent,475+extra/2+col*(buttonWidth+7),-628-row*33)
    end)
   end
   redrawDirection(style)
  end
  local popupPane=subTabs.popup
- compactSlider(popupPane,'popupDuration','Duration',222,-310,' s')
- compactSlider(popupPane,'popupStartY','Starting height',222,-353,' px')
- compactSlider(popupPane,'popupRise','Vertical travel',222,-396,' px')
- compactSlider(popupPane,'popupPeak','Peak size',222,-439,'×')
- compactSlider(popupPane,'popupIn','Pop-in duration',222,-482,' %')
- compactSlider(popupPane,'popupHold','Peak hold',222,-525,' %')
- compactSlider(popupPane,'popupFade','Fade starts at',222,-568,' %')
- compactSlider(popupPane,'popupTravel','Side travel',222,-611,' px')
+ compactSlider(popupPane,'popupDuration','Duration',222,-403,' s')
+ compactSlider(popupPane,'popupStartY','Starting height',222,-440,' px')
+ compactSlider(popupPane,'popupRise','Vertical travel',222,-477,' px')
+ compactSlider(popupPane,'popupPeak','Peak size',222,-514,'×')
+ compactSlider(popupPane,'popupIn','Pop-in duration',222,-551,' %')
+ compactSlider(popupPane,'popupHold','Peak hold',222,-588,' %')
+ compactSlider(popupPane,'popupFade','Fade starts at',222,-625,' %')
+ compactSlider(popupPane,'popupTravel','Side travel',222,-662,' px')
  local floatPane=subTabs.float
- compactSlider(floatPane,'floatDuration','Duration',222,-310,' s')
- compactSlider(floatPane,'floatStartY','Starting height',222,-353,' px')
- compactSlider(floatPane,'floatRise','Vertical rise',222,-396,' px')
- compactSlider(floatPane,'floatDrift','Side drift',222,-439,' px')
- compactSlider(floatPane,'floatSway','Side sway',222,-482,' px')
- compactSlider(floatPane,'floatFade','Fade starts at',222,-525,' %')
+ compactSlider(floatPane,'floatDuration','Duration',222,-403,' s')
+ compactSlider(floatPane,'floatStartY','Starting height',222,-440,' px')
+ compactSlider(floatPane,'floatRise','Vertical rise',222,-477,' px')
+ compactSlider(floatPane,'floatDrift','Side drift',222,-514,' px')
+ compactSlider(floatPane,'floatSway','Side sway',222,-551,' px')
+ compactSlider(floatPane,'floatFade','Fade starts at',222,-588,' %')
  local bouncePane=subTabs.bounce
- compactSlider(bouncePane,'bounceDuration','Duration',222,-310,' s')
- compactSlider(bouncePane,'bounceStartY','Starting height',222,-353,' px')
- compactSlider(bouncePane,'bounceHeight','Bounce height',222,-396,' px')
- compactSlider(bouncePane,'bouncePeak','Peak size',222,-439,'×')
- compactSlider(bouncePane,'bounceDecay','Damping',222,-482,'')
- compactSlider(bouncePane,'bounceFade','Fade starts at',222,-525,' %')
- compactSlider(bouncePane,'bounceTravel','Side travel',222,-568,' px')
- local resetStyleButton=button(animation,'RESET THIS STYLE',220,-159,235,32,function()
+ compactSlider(bouncePane,'bounceDuration','Duration',222,-403,' s')
+ compactSlider(bouncePane,'bounceStartY','Starting height',222,-440,' px')
+ compactSlider(bouncePane,'bounceHeight','Bounce height',222,-477,' px')
+ compactSlider(bouncePane,'bouncePeak','Peak size',222,-514,'×')
+ compactSlider(bouncePane,'bounceDecay','Damping',222,-551,'')
+ compactSlider(bouncePane,'bounceFade','Fade starts at',222,-588,' %')
+ compactSlider(bouncePane,'bounceTravel','Side travel',222,-625,' px')
+ local resetStyleButton=button(animation,'RESET THIS STYLE',220,-262,235,32,function()
   for _,key in ipairs(profiles[db.animationStyle] or profiles.arc) do db[key]=defaults[key] end
   for _,key in ipairs(profiles[db.animationStyle] or profiles.arc) do
    local widget=animationSliders[key]
@@ -2274,8 +2281,9 @@ local function createWindow()
    end
   end
   redrawDirection(db.animationStyle)
+  if animationPreview then animationPreview:Refresh(true) end
  end)
- local previewStyleButton=button(animation,'PREVIEW STYLE',469,-159,250,32,function()
+ local previewStyleButton=button(animation,'PREVIEW STYLE',469,-262,250,32,function()
   if not previewAnchor then
    previewAnchor=CreateFrame('Frame',nil,UIParent)
    previewAnchor:SetSize(160,12);previewAnchor:SetPoint('CENTER',UIParent,'CENTER',0,-80)
@@ -2286,9 +2294,9 @@ local function createWindow()
  addResponsive(function(extra)
   local half=(499+extra-14)/2
   resetStyleButton:SetSize(half,32)
-  anchorTopLeft(resetStyleButton,animation,220,-159)
+  anchorTopLeft(resetStyleButton,animation,220,-262)
   previewStyleButton:SetSize(half,32)
-  anchorTopLeft(previewStyleButton,animation,220+half+14,-159)
+  anchorTopLeft(previewStyleButton,animation,220+half+14,-262)
  end)
  selectAnimationStyle(db.animationStyle or 'arc')
  -- ABOUT / separate from Help for a clean sidebar navigation.
