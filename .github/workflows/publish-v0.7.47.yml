@@ -1,0 +1,80 @@
+name: Publish ShaaenFCT
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v0.7.47.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-v0747:
+    if: github.repository == 'NLshaen/ShaaenFCT'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout v0.7.47 source
+        uses: actions/checkout@v4
+        with:
+          ref: 482f2ac404d832e6fdcf89ff4f9fa0e7446df557
+
+      - name: Package the exact nine addon files
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -qx '## Version: 0.7.47' shaaenFCT.toc
+          grep -qx 'AnimationPreview.lua' shaaenFCT.toc
+          mkdir -p staging/shaaenFCT/Fonts staging/shaaenFCT/Libs
+          cp AnimationPreview.lua Core.lua Integration.lua NameplateDisplay.lua PlayerDisplay.lua README.txt shaaenFCT.toc staging/shaaenFCT/
+          cp Fonts/CustomFonts.lua staging/shaaenFCT/Fonts/
+          cp Libs/FontMedia.lua staging/shaaenFCT/Libs/
+          (cd staging && zip -qr "$GITHUB_WORKSPACE/ShaaenFCT_v0.7.47.zip" shaaenFCT)
+          unzip -t ShaaenFCT_v0.7.47.zip
+          test "$(unzip -Z1 ShaaenFCT_v0.7.47.zip | grep -v '/$' | wc -l)" -eq 9
+          ! unzip -Z1 ShaaenFCT_v0.7.47.zip | grep -E 'TEST_COMBAT_PREVIEW|TEST_HEROIC_STRIKE'
+
+      - name: Publish GitHub tag, Release and changelog
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'NOTES'
+          ## Nouveautés
+          - Cadre d'aperçu animé des polices et des trajectoires dans **Animation**, synchronisé avec le thème.
+          - Réglages de direction verticale et horizontale pour Arc, Popup, Float et Bounce.
+          - Interrupteurs ON/OFF pour Addon, modes de combat, Combat Log, Pet Damage et Overkill.
+          - Sélecteur des polices avec flèche et interrupteur Outline ON/OFF.
+          - Curseur de l'intensité Overkill en pourcentage et terminologie simplifiée.
+          - Suppression des symboles décoratifs dans l'interface.
+          - Lien Guild Discord : https://discord.gg/T6dYnaPsh.
+          - Mode Coverage : soins verts au format +1234 HP.
+
+          ## Corrections
+          - Le réglage Pet Damage est respecté lors du suivi des incantations du familier.
+          - Le contrôle Outline active correctement son rappel de changement.
+          - Migration des anciennes intensités Overkill vers les pourcentages.
+
+          ## Compatibilité
+          - WoW Forever (Interface 16001). Les restrictions du client sur les valeurs de combat protégées subsistent.
+          - Tous les changements sont répartis en 10 commits distincts basés sur v0.7.45.
+
+          ## Installation
+          Extraire le dossier `shaaenFCT` dans `Interface/AddOns/`, puis saisir `/reload`.
+          NOTES
+
+          if gh release view v0.7.47 --repo NLshaen/ShaaenFCT >/dev/null 2>&1; then
+            gh release upload v0.7.47 ShaaenFCT_v0.7.47.zip --repo NLshaen/ShaaenFCT --clobber
+            gh release edit v0.7.47 --repo NLshaen/ShaaenFCT --title "ShaaenFCT_v0.7.47" --notes-file release-notes.md --latest
+          else
+            gh release create v0.7.47 ShaaenFCT_v0.7.47.zip \
+              --repo NLshaen/ShaaenFCT \
+              --target 482f2ac404d832e6fdcf89ff4f9fa0e7446df557 \
+              --title "ShaaenFCT_v0.7.47" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+          python3 .github/scripts/update_release_notes.py v0.7.47
