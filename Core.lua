@@ -47,6 +47,7 @@ end
 local engine = CreateFrame('Frame')
 local db, window, previewAnchor
 local plates, pool, active, overkillPool, statusPool = {}, {}, {}, {}, {}
+local healAffixPool={}
 -- A final hit uses its own overlay frame anchored to the enemy nameplate.
 -- Unlike a child of the plate, this frame survives the plate being hidden.
 local fxLayer=CreateFrame('Frame',nil,UIParent)
@@ -331,6 +332,31 @@ local function createStatusLabel(fs,fontName,baseSize,status)
  label:Show()
  return label
 end
+-- Healing labels cannot concatenate their amount: WoW Forever can make
+-- UNIT_COMBAT numbers secret. A separate plus and HP label follow the same
+-- FontString, preserving secret values without reading or converting them.
+local function releaseHealAffixes(hit)
+ if not hit then return end
+ for _,part in ipairs({hit.healPrefix,hit.healSuffix}) do
+  if part then
+   part:Hide();part:ClearAllPoints();part:SetParent(UIParent)
+   healAffixPool[#healAffixPool+1]=part
+  end
+ end
+ hit.healPrefix=nil;hit.healSuffix=nil
+end
+local function makeHealAffix(fs,text,fontName,baseSize,side)
+ local part=table.remove(healAffixPool)
+ if not part then part=UIParent:CreateFontString(nil,'OVERLAY','GameFontNormal') end
+ part:SetParent(fs:GetParent())
+ part:ClearAllPoints()
+ part:SetPoint(side=='prefix' and 'RIGHT' or 'LEFT',fs,side=='prefix' and 'LEFT' or 'RIGHT',side=='prefix' and -3 or 3,0)
+ setFont(part,math.max(10,baseSize*.8),fontName)
+ part:SetText(text)
+ part:SetTextColor(.30,1,.43)
+ part:SetAlpha(1);part:Show()
+ return part
+end
 local function releaseOverkill(fx)
  fx.frame:Hide();fx.frame:ClearAllPoints();fx.frame:SetAlpha(1)
  overkillPool[#overkillPool+1]=fx.frame
@@ -345,6 +371,7 @@ local function clearNumbers()
  for i=#active,1,-1 do
   local hit=active[i]
   releaseStatusLabel(hit)
+  releaseHealAffixes(hit)
   if hit.fs then hit.fs:Hide();hit.fs:SetParent(UIParent);pool[#pool+1]=hit.fs end
   active[i]=nil
  end
@@ -931,7 +958,12 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
   travel=db.bounceTravel
  else mode='arc' end
  fs:SetAlpha(1);fs:Show()
- local hit={fs=fs,plate=plate,anchor=anchor,position=position,detached=detached,heal=isHeal,t=0,dir=dir,vdir=vdir,mode=mode,
+ local prefix,suffix
+ if isHeal and not isXP then
+  prefix=makeHealAffix(fs,'+',fontName,baseSize,'prefix')
+  suffix=makeHealAffix(fs,'HP',fontName,baseSize,'suffix')
+ end
+ local hit={healPrefix=prefix,healSuffix=suffix,fs=fs,plate=plate,anchor=anchor,position=position,detached=detached,heal=isHeal,t=0,dir=dir,vdir=vdir,mode=mode,
   duration=duration,startY=startY,rise=rise,arc=arc,curve=curve,fade=fade,
   peak=peak,intro=intro,hold=hold,drift=drift,sway=sway,decay=decay,travel=travel,
   offsetX=offsetX,offsetY=offsetY,
@@ -1310,6 +1342,7 @@ engine:SetScript('OnUpdate',function(_,elapsed)
   local p=math.min(1,a.t/math.max(.1,a.duration))
   if p>=1 then
    releaseStatusLabel(a)
+   releaseHealAffixes(a)
    a.fs:Hide();a.fs:SetParent(UIParent);pool[#pool+1]=a.fs;table.remove(active,i)
   elseif not a.suppressed then
    if not a.detached and not a.heal then
@@ -1339,11 +1372,15 @@ engine:SetScript('OnUpdate',function(_,elapsed)
    if scale and math.abs(scale-(a.lastScale or 1))>=.035 then
     setFont(a.fs,math.max(5,a.baseSize*scale),a.fontName)
     if a.statusLabel then setFont(a.statusLabel,math.max(9,a.baseSize*scale*.40),a.fontName) end
+    if a.healPrefix then setFont(a.healPrefix,math.max(10,a.baseSize*scale*.8),a.fontName) end
+    if a.healSuffix then setFont(a.healSuffix,math.max(10,a.baseSize*scale*.8),a.fontName) end
     a.lastScale=scale
    end
    local alpha=fadeAt(a,p)
    a.fs:SetAlpha(alpha)
    if a.statusLabel then a.statusLabel:SetAlpha(alpha) end
+   if a.healPrefix then a.healPrefix:SetAlpha(alpha) end
+   if a.healSuffix then a.healSuffix:SetAlpha(alpha) end
    a.fs:ClearAllPoints()
    if a.heal then
     placePlayerHeal(a.fs,a.plate,x,y)
