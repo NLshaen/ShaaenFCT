@@ -2608,7 +2608,8 @@ engine:SetScript('OnEvent',function(_,event,...)
   showXPUpdate()
  elseif event=='UNIT_SPELLCAST_SUCCEEDED' then
   local unit=...
-  if unit=='player' or unit=='pet' then coverageTrack(unit=='pet' and 'pettarget' or 'target',true) end
+  if unit=='player' then coverageTrack('target',true)
+  elseif unit=='pet' and db.petAssist then coverageTrack('pettarget',true) end
  elseif event=='PLAYER_SWING' then
   coverageTrack('target')
  elseif event=='COMBAT_LOG_MESSAGE' then
