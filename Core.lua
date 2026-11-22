@@ -2338,8 +2338,9 @@ local function createWindow()
  section(about,'MY GUILD',-290)
  label(about,'LES NO LIFE  /  NL',220,-320,17,1,.70,.39)
  label(about,'Guild community and shared adventures in WoW Forever.',220,-351,12,.72,.77,.83)
- section(about,'GUILD DISCORD INVITE',-411)
- label(about,'Paste your invite URL and save it for quick access.',220,-440,11,.73,.77,.82)
+ section(about,'GUILD DISCORD',-411)
+ label(about,'Les No Life community Discord',220,-440,11,.73,.77,.82)
+ local guildDiscordURL='https://discord.gg/T6dYnaPsh'
  local discordInput=CreateFrame('EditBox',nil,about)
  discordInput:SetPoint('TOPLEFT',220,-467)
  discordInput:SetSize(493,30)
@@ -2349,39 +2350,16 @@ local function createWindow()
  discordInput:SetTextColor(1,.88,.72)
  if discordInput.SetTextInsets then discordInput:SetTextInsets(8,8,0,0) end
  colorTexture(discordInput,.13,.15,.19,1)
- if discordInput.SetMaxLetters then discordInput:SetMaxLetters(200) end
- discordInput:SetText(db.discordInvite or '')
- local discordStatus=label(about,'',220,-551,11,.70,.78,.84)
- local function refreshDiscordStatus()
-  local link=db.discordInvite or ''
-  discordStatus:SetText(link~='' and 'Saved. Select the URL above and press Ctrl+C to copy.' or 'No invite configured yet. This is not a generated invite link.')
- end
- local function saveDiscord()
-  local link=discordInput:GetText() or ''
-  link=link:match('^%s*(.-)%s*$')
-  if link~='' and not (link:match('^https://discord%.gg/') or link:match('^https://discord%.com/invite/')) then
-   discordStatus:SetText('Use a valid https://discord.gg/... invite URL.')
-   return
-  end
-  db.discordInvite=link
-  discordInput:SetText(link)
-  discordInput:ClearFocus()
-  refreshDiscordStatus()
- end
- local saveDiscordButton=button(about,'SAVE DISCORD LINK',220,-506,237,31,saveDiscord,true)
- local clearDiscordButton=button(about,'CLEAR LINK',469,-506,244,31,function()
-  db.discordInvite='';discordInput:SetText('');refreshDiscordStatus()
- end)
- addResponsive(function(extra)
-  local half=(493+extra-12)/2
-  saveDiscordButton:SetWidth(half)
-  anchorTopLeft(saveDiscordButton,about,220,-506)
-  clearDiscordButton:SetWidth(half)
-  anchorTopLeft(clearDiscordButton,about,220+half+12,-506)
- end)
- discordInput:SetScript('OnEnterPressed',saveDiscord)
- discordInput:SetScript('OnEscapePressed',function(self) self:SetText(db.discordInvite or '');self:ClearFocus() end)
- refreshDiscordStatus()
+ discordInput:SetText(guildDiscordURL)
+ discordInput:SetScript('OnEnterPressed',function(self) self:HighlightText();self:SetFocus() end)
+ discordInput:SetScript('OnEscapePressed',function(self) self:SetText(guildDiscordURL);self:ClearFocus() end)
+ discordInput:SetScript('OnEditFocusLost',function(self) self:SetText(guildDiscordURL) end)
+ button(about,'SELECT LINK FOR CTRL+C',220,-506,499,31,function()
+  discordInput:SetText(guildDiscordURL)
+  discordInput:SetFocus()
+  discordInput:HighlightText()
+ end,true)
+ label(about,'Discord URL: '..guildDiscordURL,220,-561,11,.70,.78,.84)
  label(about,'Damage, incoming heals, XP, custom fonts and animation styles.',220,-614,11,.64,.69,.75)
 
  -- HELP / quick start and slash commands only.
