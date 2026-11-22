@@ -124,7 +124,7 @@ local baseFonts = {
  Skurri='Fonts\\SKURRI.TTF',
 }
 local defaults = {
- enabled=true, plateDisplayEnabled=true, discordInvite='', damageSource='coverage', petAssist=true, showKillingBlow=true, overkillDuration=1.35, overkillShakeIntensity='medium', font=defaultFont, critFont=defaultFont, uiFont=defaultUIFont,
+ enabled=true, plateDisplayEnabled=true, discordInvite='', damageSource='coverage', combatLogEnabled=true, petAssist=true, showKillingBlow=true, overkillDuration=1.35, overkillShakeIntensity=50, font=defaultFont, critFont=defaultFont, uiFont=defaultUIFont,
  uiColorStyle='ember', settingsSection='general', windowScale=100, windowOpacity=100,
  outline=true, size=27, critScale=1.5, duration=.9, startY=22,
  rise=65, arc=65, curve=40, fade=55, direction='alternate', animationStyle='arc',
@@ -145,7 +145,7 @@ local defaults = {
 local ranges = {
  duration={.3,2.5,.05,2}, startY={5,100,1,0}, rise={0,160,1,0},
  arc={0,150,1,0}, curve={0,120,1,0}, fade={0,95,1,0},
- size={10,70,1,0}, critScale={1,2.5,.05,2}, overkillDuration={.5,3,.05,2},
+ size={10,70,1,0}, critScale={1,2.5,.05,2}, overkillDuration={.5,3,.05,2}, overkillShakeIntensity={0,100,1,0},
  popupDuration={.3,2.5,.05,2}, popupStartY={5,110,1,0}, popupRise={0,140,1,0},
  popupPeak={1,3,.05,2}, popupIn={5,55,1,0}, popupHold={0,60,1,0}, popupFade={0,95,1,0},
  popupTravel={0,120,1,0},
@@ -384,6 +384,7 @@ local function disableNative()
  if type(set)=='function' then pcall(set,'floatingCombatTextCombatDamage_v2','0') end
 end
 local function enableFilteredLog()
+ if not db or db.combatLogEnabled==false then return end
  if C_CombatLog and type(C_CombatLog.SetFilteredEventsEnabled)=='function' then
   pcall(C_CombatLog.SetFilteredEventsEnabled,true)
  end
@@ -626,7 +627,10 @@ local overkillShakeAmplitudes={
 }
 local function overkillShakeAt(t,intensity)
  if t<=0 or t>=OVERKILL_SHAKE_TIME then return 0,0 end
- local amplitude=overkillShakeAmplitudes[intensity] or overkillShakeAmplitudes.medium
+ -- 0 = no shake, 50 = the old medium preset, 100 = maximum.
+ local percent=type(intensity)=='number' and math.max(0,math.min(100,intensity)) or 50
+ local factor=percent/50
+ local amplitude={overkillShakeAmplitudes.medium[1]*factor,overkillShakeAmplitudes.medium[2]*factor}
  local progress=t/OVERKILL_SHAKE_TIME
  local strength=1-progress
  strength=strength*strength
@@ -973,7 +977,7 @@ end
 -- The client passes a display-only COMBAT_LOG_MESSAGE from Blizzard's selected
 -- combat log filter. The message contents are never decoded or inspected if secret.
 local function onFilteredCombatMessage(message,order)
- if not db or not db.enabled or db.damageSource~='coverage' then return end
+ if not db or not db.enabled or db.combatLogEnabled==false or db.damageSource~='coverage' then return end
  local oldest=Enum and Enum.CombatLogMessageOrder and Enum.CombatLogMessageOrder.Oldest
  if oldest~=nil and not (issecretvalue and issecretvalue(order)) and order==oldest then
   smartStats.oldest=smartStats.oldest+1;return
@@ -1457,6 +1461,34 @@ local function button(parent,caption,x,y,width,height,click,accent)
  b:SetScript('OnClick',click or function() end)
  return b
 end
+-- Switches use textures rather than decorative bullet glyphs. The whole row is clickable.
+local function toggleRow(parent,caption,y,onClick)
+ local row=button(parent,caption,220,y,499,31,onClick)
+ row.caption:ClearAllPoints()
+ row.caption:SetPoint('LEFT',row,'LEFT',14,0)
+ row.caption:SetJustifyH('LEFT')
+ local track=CreateFrame('Frame',nil,row)
+ track:SetSize(57,23);track:SetPoint('RIGHT',row,'RIGHT',-10,0)
+ local bg=track:CreateTexture(nil,'ARTWORK')
+ bg:SetAllPoints(track)
+ local knob=track:CreateTexture(nil,'OVERLAY')
+ knob:SetSize(17,17)
+ local onText=track:CreateFontString(nil,'OVERLAY','GameFontNormalSmall')
+ onText:SetPoint('CENTER',track,'CENTER',0,0)
+ onText:SetTextColor(1,1,1)
+ function row:RefreshSwitch(on)
+  local skin=currentUISkin()
+  tintTexture(bg,on and skin.accent or {.29,.33,.40},1)
+  tintTexture(knob,{.96,.97,.98},1)
+  knob:ClearAllPoints()
+  knob:SetPoint(on and 'RIGHT' or 'LEFT',track,on and 'RIGHT' or 'LEFT',on and -3 or 3,0)
+  onText:SetText(on and 'ON' or 'OFF')
+  onText:ClearAllPoints()
+  onText:SetPoint('CENTER',track,'CENTER',on and -9 or 9,0)
+ end
+ row._switchTrack=track
+ return row
+end
 local function header(parent,title,subtitle,settingsPage)
  local shift=settingsPage and 44 or 0
  label(parent,title,215,-90-shift,24,.98,.98,.99)
@@ -1748,102 +1780,58 @@ local function createWindow()
   wowNameFooter:SetText(newName)
   wowNumberFooter:SetText('v'..newVersion)
  end)
- -- GENERAL
- header(general,'General','Addon status, combat source and final-hit effects',true)
- section(general,'ADDON STATUS',-204)
- local enabled=button(general,'',220,-229,499,33,function()
+ -- GENERAL: independent clickable on/off switches, with exclusive damage sources.
+ header(general,'General','Addon status, combat source, log and Overkill',true)
+ section(general,'ADDON STATUS',-195)
+ local enabled=toggleRow(general,'Enable addon',-216,function()
   db.enabled=not db.enabled
   clearNumbers();clearQueues()
-  if not db.enabled then enableNative()
-  elseif db.damageSource=='player' then enableNative()
+  if not db.enabled or db.damageSource=='player' then enableNative()
   else disableNative();if db.damageSource=='coverage' then enableFilteredLog() end end
   refreshGeneral()
  end)
- section(general,'COMBAT TEXT MODE',-275)
+ section(general,'COMBAT TEXT MODE',-259)
  local choices={}
- local sourceNames={coverage='COVERAGE  /  MELEE + SPELL + DoT + HEAL + XP',player='BLIZZARD  /  NATIVE DAMAGE',all='ALL DAMAGE  /  UNFILTERED'}
- local sourceDescriptions={
-  coverage='Extended tracked-target damage (solo fallback)',
-  player='Accurate source filtering, native text only',
-  all='Also displays damage from other players'
- }
+ local sourceNames={coverage='Coverage  /  Melee, spells, DoT, heals, XP',player='Blizzard  /  Native damage',all='All damage  /  Unfiltered'}
  local function sourceChoice(key,y)
-  local b=button(general,'',220,y,499,48,function() setSource(key);refreshGeneral() end)
-  b.name=label(b,sourceNames[key],15,-8,12,.92,.94,.96)
-  b.description=label(b,sourceDescriptions[key],15,-29,10,.60,.64,.70)
-  choices[key]=b
+  local row=toggleRow(general,sourceNames[key],y,function()
+   -- Sources are mutually exclusive. Turning a selected non-Coverage source
+   -- off returns to Coverage; never leave the engine with no valid source.
+   if db.damageSource==key then
+    setSource(key=='coverage' and 'player' or 'coverage')
+   else setSource(key) end
+   refreshGeneral()
+  end)
+  choices[key]=row
  end
-  sourceChoice('coverage',-352)
- sourceChoice('player',-407)
- label(general,'Coverage: enemy damage + green HEAL and violet XP player frames.',220,-464,11,.75,.79,.83)
- button(general,'OPEN COMBAT LOG',220,-489,229,34,function()
-  if InCombatLockdown and InCombatLockdown() then say('Open the Combat Log outside combat.');return end
-  local log=_G.COMBATLOG
-  if log and type(FCF_SelectDockFrame)=='function' then
-   local ok=pcall(FCF_SelectDockFrame,log)
-   if ok then enableFilteredLog();say('Select the My Actions filter, then return to chat.');return end
-  end
-  say('Open Combat Log and select My Actions.')
- end,true)
- -- Let Smart match filtered log messages on the OWN pet's current target;
- -- never infer pet hits just because a unit took damage.
- local petAssistButton=button(general,'',466,-489,253,34,function()
-  db.petAssist=not db.petAssist
+ sourceChoice('coverage',-281)
+ sourceChoice('player',-317)
+ sourceChoice('all',-353)
+ section(general,'COMBAT LOG',-399)
+ local logToggle=toggleRow(general,'Add Combat Log',-420,function()
+  db.combatLogEnabled=not db.combatLogEnabled
   clearQueues()
+  if db.combatLogEnabled then enableFilteredLog() end
   refreshGeneral()
  end)
- petAssistButton:SetPoint('TOPRIGHT',general,'TOPRIGHT',-36,-489)
- local killToggle=button(general,'',220,-532,499,34,function()
+ section(general,'PET DAMAGE',-463)
+ local petAssistButton=toggleRow(general,'Add Pet Damage',-484,function()
+  db.petAssist=not db.petAssist;clearQueues();refreshGeneral()
+ end)
+ section(general,'OVERKILL',-527)
+ local killToggle=toggleRow(general,'Add Overkill',-548,function()
   db.showKillingBlow=not db.showKillingBlow
   if not db.showKillingBlow then clearOverkills() end
   refreshGeneral()
  end)
- valueSlider(general,'overkillDuration','Final hit duration',-582,' s')
- -- Keep the three shake presets in General, immediately below Final hits.
- -- The chosen preset is stored in shaaenFCTDB and takes effect without /reload.
- label(general,'Overkill shake intensity  (1 second)',220,-616,12,.89,.92,.95)
- local shakeButtons={}
- local shakePresets={{'light','LÉGER'},{'medium','MOYEN'},{'strong','FORT'}}
- for index,option in ipairs(shakePresets) do
-  local key,name=option[1],option[2]
-  local b=button(general,name,220+(index-1)*169,-643,161,35,function()
-   db.overkillShakeIntensity=key
-   refreshGeneral()
-  end)
-  shakeButtons[key]=b
-  addResponsive(function(extra)
-   local width=(499+extra-16)/3
-   b:ClearAllPoints()
-   b:SetPoint('TOPLEFT',general,'TOPLEFT',220+(index-1)*(width+8),-643)
-   b:SetSize(width,35)
-  end)
- end
-
+ valueSlider(general,'overkillDuration','Overkill duration',-591,' s')
+ valueSlider(general,'overkillShakeIntensity','Overkill shake intensity',-637,' %')
  refreshGeneral=function()
-  enabled.caption:SetText(db.enabled and '●   ENABLE  /  ON' or '○   ENABLE  /  OFF')
-  petAssistButton.caption:SetText(db.petAssist and '●  OWN PET TARGET  /  ON' or '○  OWN PET TARGET  /  OFF')
-  killToggle.caption:SetText(db.showKillingBlow and '●  FINAL HITS  /  EXTENDED NUMBERS' or '○  FINAL HITS  /  DISABLED')
-  for _,option in ipairs(shakePresets) do
-   local key,name=option[1],option[2]
-   local b=shakeButtons[key]
-   local selected=db.overkillShakeIntensity==key
-   local skin=currentUISkin()
-   b.caption:SetText((selected and '●  ' or '○  ')..name)
-   if selected then
-    b.caption:SetTextColor(skin.soft[1],skin.soft[2],skin.soft[3])
-    tintTexture(b.stripe,skin.accent)
-   else
-    b.caption:SetTextColor(.80,.83,.87)
-    tintTexture(b.stripe,{.29,.32,.38})
-   end
-  end
-  for key,b in pairs(choices) do
-   b.name:SetText((db.damageSource==key and '●  ' or '○  ')..sourceNames[key])
-   if db.damageSource==key then
-    local skin=currentUISkin()
-    b.name:SetTextColor(skin.soft[1],skin.soft[2],skin.soft[3])
-   else b.name:SetTextColor(.88,.90,.94) end
-  end
+  enabled:RefreshSwitch(db.enabled)
+  for key,row in pairs(choices) do row:RefreshSwitch(db.damageSource==key) end
+  logToggle:RefreshSwitch(db.combatLogEnabled~=false)
+  petAssistButton:RefreshSwitch(db.petAssist)
+  killToggle:RefreshSwitch(db.showKillingBlow)
  end
  -- TYPOGRAPHY / isolate font UI compatibility so other panels can always build.
  local typographyOK, typographyError = pcall(function()
@@ -2516,6 +2504,10 @@ engine:SetScript('OnEvent',function(_,event,...)
    end
    db.arialDefaultsMigrated=true
   end
+  -- Upgrade legacy Overkill presets to a numeric percentage.
+  if db.overkillShakeIntensity=='light' then db.overkillShakeIntensity=25
+  elseif db.overkillShakeIntensity=='medium' then db.overkillShakeIntensity=50
+  elseif db.overkillShakeIntensity=='strong' then db.overkillShakeIntensity=85 end
   for key,range in pairs(ranges) do
    if type(db[key])~='number' then db[key]=defaults[key] end
    db[key]=math.max(range[1],math.min(range[2],db[key]))
@@ -2523,9 +2515,7 @@ engine:SetScript('OnEvent',function(_,event,...)
   if type(db.showKillingBlow)~='boolean' then db.showKillingBlow=true end
   if type(db.plateDisplayEnabled)~='boolean' then db.plateDisplayEnabled=true end
   if type(db.petAssist)~='boolean' then db.petAssist=true end
-  if not overkillShakeAmplitudes[db.overkillShakeIntensity] then
-   db.overkillShakeIntensity=defaults.overkillShakeIntensity
-  end
+  if type(db.combatLogEnabled)~='boolean' then db.combatLogEnabled=true end
   if type(db.discordInvite)~='string' then db.discordInvite='' end
   if not UI_COLOR_STYLES[db.uiColorStyle] then db.uiColorStyle='ember' end
   if db.settingsSection~='general' and db.settingsSection~='style' and db.settingsSection~='fonts' then db.settingsSection='general' end
@@ -2541,7 +2531,7 @@ engine:SetScript('OnEvent',function(_,event,...)
   if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' then db.animationStyle='arc' end
   -- v0.7.42 removes the selectable Smart mode. Keep player / all choices.
   if db.damageSource~='coverage' and db.damageSource~='player' and db.damageSource~='all' then db.damageSource='coverage' end
-  db.settingsVersion=8
+  db.settingsVersion=9
   if db.enabled then
    if db.damageSource=='player' then enableNative() else disableNative() end
    if db.damageSource=='coverage' then enableFilteredLog() end
