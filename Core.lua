@@ -1788,7 +1788,7 @@ local function createWindow()
   sliderGroups[#sliderGroups+1]={heading=heading,value=current,slider=slider}
   if key=='windowScale' then w._scaleSlider=slider else w._opacitySlider=slider end
  end
- topSlider('windowScale','WINDOW SCALE',75,120,function(n) w:SetScale(n/100) end)
+ topSlider('windowScale','SCALE',75,120,function(n) w:SetScale(n/100) end)
  topSlider('windowOpacity','OPACITY',0,100,function(n) w:SetAlpha(n/100) end)
  local function positionTopSliders()
   local available=math.max(420,(w:GetWidth() or minWidth)-299)
