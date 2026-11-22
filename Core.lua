@@ -1842,6 +1842,15 @@ local function createWindow()
  local function dropdown(key,name,y)
   label(typeface,name,220,y,12,.89,.91,.94)
   local selected=button(typeface,'',220,y-23,499,34,function() end)
+  selected.caption:ClearAllPoints()
+  selected.caption:SetPoint('LEFT',selected,'LEFT',15,0)
+  selected.caption:SetJustifyH('LEFT')
+  -- A separate right-side caret makes the font selector an obvious dropdown.
+  local caret=selected:CreateFontString(nil,'OVERLAY','GameFontNormal')
+  caret:SetPoint('RIGHT',selected,'RIGHT',-15,0)
+  caret:SetFont(baseFonts['Arial Narrow'],17,'')
+  caret:SetText('▼')
+  caret:SetTextColor(.95,.74,.47)
   local popup=CreateFrame('Frame',nil,w)
   popup:SetFrameStrata('TOOLTIP')
   -- Older/custom clients may omit GetFrameLevel on certain widgets.
@@ -1919,7 +1928,7 @@ local function createWindow()
       db[key]=option.name
       if key=='uiFont' then refreshUIFont() end
       if refreshSamples then refreshSamples() end
-      selected.caption:SetText(option.name..'    ▾')
+      selected.caption:SetText(option.name)
       popup:Hide();search:ClearFocus()
      end)
     end
@@ -1940,17 +1949,17 @@ local function createWindow()
   end)
   fontPopups[#fontPopups+1]=popup
   popup:Hide()
-  fontSelectors[key]=function() selected.caption:SetText((db[key] or defaultFont)..'    ▾') end
+  fontSelectors[key]=function() selected.caption:SetText(db[key] or defaultFont) end
  end
  dropdown('font','NORMAL DAMAGE   /   WHITE',-225)
  dropdown('critFont','CRITICAL DAMAGE   /   YELLOW',-288)
  section(typeface,'SIZE & OUTLINE',-361)
  valueSlider(typeface,'size','Font size',-386,' px')
  valueSlider(typeface,'critScale','Critical scale',-425,'×')
- local outline=button(typeface,'',220,-467,499,33,function()
+ local outline=toggleRow(typeface,'Font outline',-467,function()
   db.outline=not db.outline
-  outline.caption:SetText(db.outline and '●  OUTLINE ON' or '○  OUTLINE OFF')
   if refreshSamples then refreshSamples() end
+  outline:RefreshSwitch(db.outline)
  end)
  section(typeface,'SETTINGS TYPOGRAPHY',-511)
  dropdown('uiFont','SETTINGS FONT   /   COMPACT UI',-533)
@@ -1978,7 +1987,7 @@ local function createWindow()
  label(typeface,'Custom fonts: Fonts/CustomFonts.lua  ·  Also supports LibSharedMedia packs.',220,-665,10,.61,.65,.71)
  refreshFonts=function()
   for _,redraw in pairs(fontSelectors) do redraw() end
-  outline.caption:SetText(db.outline and '●  OUTLINE ON' or '○  OUTLINE OFF')
+  outline:RefreshSwitch(db.outline)
   refreshSamples()
  end
  end) -- Typography construction guard.
