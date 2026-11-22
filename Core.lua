@@ -2001,7 +2001,8 @@ local function createWindow()
  section(typeface,'SIZE & OUTLINE',-361)
  valueSlider(typeface,'size','Font size',-386,' px')
  valueSlider(typeface,'critScale','Critical scale',-425,'×')
- local outline=toggleRow(typeface,'Font outline',-467,function()
+ local outline
+ outline=toggleRow(typeface,'Font outline',-467,function()
   db.outline=not db.outline
   if refreshSamples then refreshSamples() end
   outline:RefreshSwitch(db.outline)
