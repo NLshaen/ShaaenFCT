@@ -11,10 +11,12 @@ UNPUBLISHED LOCAL CHANGES (5 SEPARATE COMMITS, NO TAG OR PUSH)
   announcements do NOT independently verify that GitHub published a release.
   Use /sfct versiontest for a demo popup, or /sfct versioncheck to re-check
   known peer versions and announce your installed build.
-- Animation > POW is a fifth tab with ClassicFCT-style two-stage scaling
-  on critical hits. ClassicFCT defaults: Start 0.25x, Mid 1.55x, End 1.00x,
-  POW duration ratio 0.30, In/Out ratio 0.70; all are adjustable. Overall
-  duration, initial height and independent normal/crit offsets are editable.
+- Animation > POW is a fifth tab with Blizzard-native-inspired critical
+  text: 1x -> 2x over about 0.05s, then back to 1x by ~0.20s. Total scroll
+  duration is 1.90s and fading starts near 1.30s. POW uses directional
+  travel, initial height and independent normal/crit offsets. All timings,
+  travel, fade and scale values are adjustable. Existing customized POW
+  presets are preserved when possible; older untouched defaults migrate.
 - Settings > General > Blizzard FCT replaces Blizzard / Native damage.
 - While Blizzard FCT is OFF, supported native floating-combat-text CVars
   are set to 0, including available experience-text aliases. The original

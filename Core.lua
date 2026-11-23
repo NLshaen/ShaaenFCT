@@ -143,9 +143,12 @@ local defaults = {
  floatDrift=24, floatSway=15, floatFade=56,
  bounceDuration=1.0, bounceStartY=27, bounceHeight=62,
  bouncePeak=1.5, bounceDecay=3.0, bounceFade=62, bounceTravel=28,
- -- ClassicFCT Pow defaults: 0.25 -> 1.55 -> 1, over 30% of a hit.
- powEnabled=true, powDuration=.9, powStartY=22, powPhaseDuration=.30,
- powRatio=.70, powInitScale=.25, powMidScale=1.55, powEndScale=1,
+ -- Classic-style Blizzard FCT: crit 1x -> 2x in ~0.05 seconds, then
+ -- back to 1x by ~0.20 seconds. Text scrolls for ~1.9 seconds, with fade
+ -- beginning after ~1.3 seconds. Travel adapts this to nameplate anchors.
+ powEnabled=true, powDuration=1.90, powStartY=22, powRise=130, powTravel=24,
+ powFade=68, powPhaseDuration=.11, powRatio=.25,
+ powInitScale=1, powMidScale=2, powEndScale=1,
  powNormalX=0, powNormalY=0, powCritX=0, powCritY=0
 }
 local ranges = {
@@ -161,6 +164,7 @@ local ranges = {
  bouncePeak={1,2.5,.05,2}, bounceDecay={1,7,.25,2}, bounceFade={0,95,1,0},
  bounceTravel={0,120,1,0},
  powDuration={.3,3,.05,2}, powStartY={0,100,1,0},
+ powRise={0,250,1,0}, powTravel={0,160,1,0}, powFade={0,95,1,0},
  powPhaseDuration={.01,1,.01,2}, powRatio={.01,.99,.01,2},
  powInitScale={.1,5,.01,2}, powMidScale={.1,5,.01,2},
  powEndScale={.1,5,.01,2}
@@ -664,17 +668,20 @@ end
 local function profileMotionAt(hit,p)
  local mode=hit.mode or 'arc'
  if mode=='pow' then
-  -- ClassicFCT-style two-stage crit scale: start -> mid -> end. No copying
-  -- of third-party engine code, only the numerical behavior/default values.
+  -- Classic Blizzard FCT reference: critical text grows 30 -> 60 in .05s,
+  -- shrinks to 30 by .20s, then scrolls and fades. The crit burst affects
+  -- scale only; both crits and regular hits travel in the selected direction.
   local scale=1
   if hit.powEnabled and hit.critical then
-   local phase=math.min(1,p/math.max(.01,hit.powPhaseDuration or .30))
-   local ratio=math.max(.01,math.min(.99,hit.powRatio or .70))
-   local a,b,c=hit.powInitScale or .25,hit.powMidScale or 1.55,hit.powEndScale or 1
+   local phase=math.min(1,p/math.max(.01,hit.powPhaseDuration or .11))
+   local ratio=math.max(.01,math.min(.99,hit.powRatio or .25))
+   local a,b,c=hit.powInitScale or 1,hit.powMidScale or 2,hit.powEndScale or 1
    if phase<ratio then scale=a+(b-a)*phase/ratio
    else scale=b+(c-b)*(phase-ratio)/(1-ratio) end
   end
-  return 0,hit.startY or 0,scale
+  local x=(hit.dir or 1)*(hit.travel or 0)*p
+  local y=verticalMotionY(hit,(hit.startY or 0)+(hit.rise or 0)*p)
+  return x,y,scale
  elseif mode=='popup' then
   local intro=math.max(.05,hit.intro or .18)
   local hold=math.min(.9,hit.hold or .22)
@@ -1028,7 +1035,8 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
   peak,decay=db.bouncePeak,db.bounceDecay
   travel=db.bounceTravel
  elseif mode=='pow' then
-  duration,startY,rise,arc,curve,fade=db.powDuration,db.powStartY,0,0,0,55
+  duration,startY,rise,arc,curve,fade=db.powDuration,db.powStartY,db.powRise,0,0,db.powFade
+  travel=db.powTravel
  else mode='arc' end
  fs:SetAlpha(1);fs:Show()
  local prefix,suffix
@@ -2187,7 +2195,7 @@ local function createWindow()
   popup='Scale up, hold, then drift to either side and fade',
   float='Smooth vertical rise with gentle horizontal sway',
   bounce='Springy rise with damping and directional drift',
-  pow='ClassicFCT-inspired two-stage critical scale burst'
+  pow='Blizzard-style critical pop, directional scroll, and soft fade'
  }
  local animationSliders={}
  if _G.ShaaenFCTAnimationPreview then
@@ -2289,7 +2297,7 @@ local function createWindow()
   popup={'popupDuration','popupStartY','popupRise','popupPeak','popupIn','popupHold','popupFade','popupTravel','popupDirection','popupVerticalDirection'},
   float={'floatDuration','floatStartY','floatRise','floatDrift','floatSway','floatFade','floatDirection','floatVerticalDirection'},
   bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'},
-  pow={'powEnabled','powDuration','powStartY','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale'}
+  pow={'powEnabled','powDuration','powStartY','powRise','powTravel','powFade','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale'}
  }
  for style,keys in pairs(profiles) do
   for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
@@ -2422,18 +2430,22 @@ local function createWindow()
  compactSlider(bouncePane,'bounceDecay','Damping',222,-551,'')
  compactSlider(bouncePane,'bounceFade','Fade starts at',222,-588,' %')
  compactSlider(bouncePane,'bounceTravel','Side travel',222,-625,' px')
- -- POW uses the five original ClassicFCT scale/time parameters with the same
- -- defaults, plus an independent overall duration and starting height.
+ -- Classic Blizzard FCT-style crit burst and continuous scrolling.
+ -- More compact vertical spacing fits timing, motion and scale without
+ -- hiding any of the normal/critical position offset sliders on the right.
  local powPane=subTabs.pow
  compactSlider(powPane,'powDuration','Total duration',222,-403,' s')
- compactSlider(powPane,'powStartY','Starting height',222,-440,' px')
- compactSlider(powPane,'powPhaseDuration','Pow duration ratio',222,-477,'')
- compactSlider(powPane,'powRatio','In / Out ratio',222,-514,'')
- compactSlider(powPane,'powInitScale','Start scale',222,-551,'x')
- compactSlider(powPane,'powMidScale','Mid scale',222,-588,'x')
- compactSlider(powPane,'powEndScale','End scale',222,-625,'x')
+ compactSlider(powPane,'powStartY','Starting height',222,-430,' px')
+ compactSlider(powPane,'powRise','Vertical travel',222,-457,' px')
+ compactSlider(powPane,'powTravel','Side travel',222,-484,' px')
+ compactSlider(powPane,'powFade','Fade starts at',222,-511,' %')
+ compactSlider(powPane,'powPhaseDuration','Crit burst / duration',222,-538,'')
+ compactSlider(powPane,'powRatio','Peak timing ratio',222,-565,'')
+ compactSlider(powPane,'powInitScale','Start scale',222,-592,'x')
+ compactSlider(powPane,'powMidScale','Mid scale',222,-619,'x')
+ compactSlider(powPane,'powEndScale','End scale',222,-646,'x')
  local powToggle
- powToggle=toggleRow(powPane,'Enable POW on critical hits',-665,function()
+ powToggle=toggleRow(powPane,'Enable POW on critical hits',-688,function()
   db.powEnabled=not db.powEnabled
   powToggle:RefreshSwitch(db.powEnabled)
   if animationPreview then animationPreview:Refresh(true) end
@@ -2670,6 +2682,17 @@ engine:SetScript('OnEvent',function(_,event,...)
   for key,range in pairs(ranges) do
    if type(db[key])~='number' then db[key]=defaults[key] end
    db[key]=math.max(range[1],math.min(range[2],db[key]))
+  end
+  -- One-time native-POW default migration. Never overwrite values that
+  -- differ from the previous defaults (user-customized animation presets).
+  -- New powRise, powTravel and powFade already inherit defaults above.
+  if not db.powNativeDefaultsMigrated then
+   local older={powDuration=.9,powPhaseDuration=.30,powRatio=.70,
+    powInitScale=.25,powMidScale=1.55}
+   for key,oldValue in pairs(older) do
+    if db[key]==oldValue then db[key]=defaults[key] end
+   end
+   db.powNativeDefaultsMigrated=true
   end
   if type(db.showKillingBlow)~='boolean' then db.showKillingBlow=true end
   if type(db.plateDisplayEnabled)~='boolean' then db.plateDisplayEnabled=true end

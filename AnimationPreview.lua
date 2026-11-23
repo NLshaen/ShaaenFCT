@@ -34,7 +34,8 @@ local function profile(db,critical)
  local hit={mode=mode,dir=dir,vdir=vdir,critical=critical,offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0,
   offsetY=db[mode..(critical and 'CritY' or 'NormalY')] or 0}
  if mode=='pow' then
-  hit.duration=db.powDuration;hit.startY=db.powStartY;hit.fade=55
+  hit.duration=db.powDuration;hit.startY=db.powStartY
+  hit.rise=db.powRise;hit.travel=db.powTravel;hit.fade=db.powFade
   hit.powEnabled=db.powEnabled;hit.powPhaseDuration=db.powPhaseDuration
   hit.powRatio=db.powRatio;hit.powInitScale=db.powInitScale
   hit.powMidScale=db.powMidScale;hit.powEndScale=db.powEndScale
