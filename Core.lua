@@ -1866,7 +1866,7 @@ local function createWindow()
  end)
  section(general,'COMBAT TEXT MODE',-259)
  local choices={}
- local sourceNames={coverage='Coverage  /  Melee, spells, DoT, heals, XP',player='Blizzard  /  Native damage',all='All damage  /  Unfiltered'}
+ local sourceNames={coverage='Coverage  /  Melee, spells, DoT, heals, XP',player='Blizzard FCT',all='All damage  /  Unfiltered'}
  local function sourceChoice(key,y)
   local row=toggleRow(general,sourceNames[key],y,function()
    -- Sources are mutually exclusive. Turning a selected non-Coverage source
@@ -2461,7 +2461,7 @@ local function createWindow()
  label(help,'/sfct                 Open / close settings',220,-377,12)
  label(help,'/sfct open            Open settings',220,-405,12)
  label(help,'/sfct source coverage  Melee, spells, DoT, heal and XP',220,-433,12)
- label(help,'/sfct source player   Blizzard native damage',220,-461,12)
+ label(help,'/sfct source player   Blizzard FCT',220,-461,12)
  label(help,'/sfct source all      Unfiltered damage',220,-489,12)
  label(help,'/sfct status          Compact status',220,-517,12)
  label(help,'/sfct plate traffic  Damage routing counts',220,-545,12)
@@ -2807,7 +2807,7 @@ SlashCmdList.SHAAENFCT=function(msg)
   db.plateDisplayEnabled=true;return
  end
  if msg=='source smart' or msg=='source experimental' then setSource('coverage');say('SMART mode was removed; using COVERAGE.');return end
- if msg=='source player' or msg=='source moi' then setSource('player');say('Blizzard source: your damage only');return end
+ if msg=='source player' or msg=='source moi' then setSource('player');say('Blizzard FCT: native floating combat text');return end
  if msg=='source all' or msg=='source tous' then setSource('all');say('Addon source: all damage (including other players)');return end
  if msg=='source' then say('Current source: '..db.damageSource);return end
  if msg=='plate on' or msg=='plate off' then
