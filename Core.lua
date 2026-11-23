@@ -2838,6 +2838,12 @@ SlashCmdList.SHAAENFCT=function(msg)
   end
   return
  end
+ if msg=='versiontest' and type(_G.ShaaenFCTTestUpdatePopup)=='function' then
+  _G.ShaaenFCTTestUpdatePopup();return
+ end
+ if msg=='versioncheck' and type(_G.ShaaenFCTCheckPeerVersion)=='function' then
+  _G.ShaaenFCTCheckPeerVersion();say('Checked known peer versions; GitHub release status requires a browser.');return
+ end
  if msg=='ui reset' or msg=='windowreset' then
   db.windowScale=100;db.windowOpacity=100
   if window then

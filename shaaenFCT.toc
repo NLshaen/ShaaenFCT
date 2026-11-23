@@ -10,3 +10,4 @@ PlayerDisplay.lua
 AnimationPreview.lua
 Core.lua
 Integration.lua
+VersionNotifier.lua
