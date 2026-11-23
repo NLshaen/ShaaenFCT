@@ -17,6 +17,9 @@ UNPUBLISHED LOCAL CHANGES (5 SEPARATE COMMITS, NO TAG OR PUSH)
   travel, initial height and independent normal/crit offsets. All timings,
   travel, fade and scale values are adjustable. Existing customized POW
   presets are preserved when possible; older untouched defaults migrate.
+  POW has HORIZONTAL (LEFT / RIGHT / ALTERNATE / RANDOM) and VERTICAL
+  (UP / DOWN / ALTERNATE / RANDOM) dropdowns, like Arc/Popup/Float/Bounce.
+  Side travel and vertical travel sliders set how far each direction moves.
 - Settings > General > Blizzard FCT replaces Blizzard / Native damage.
 - While Blizzard FCT is OFF, supported native floating-combat-text CVars
   are set to 0, including available experience-text aliases. The original

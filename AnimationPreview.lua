@@ -22,9 +22,9 @@ end
 
 local function profile(db,critical)
  local mode=db.animationStyle or 'arc'
- local directionField=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'})[mode] or 'direction'
+ local directionField=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection',pow='powDirection'})[mode] or 'direction'
  local direction=db[directionField] or 'alternate'
- local verticalField=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'})[mode] or 'verticalDirection'
+ local verticalField=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection',pow='powVerticalDirection'})[mode] or 'verticalDirection'
  local vChoice=db[verticalField] or 'up'
  local vdir=(vChoice=='down' or (vChoice=='alternate' and critical)) and -1 or 1
  if vChoice=='random' then vdir=math.random(2)==1 and 1 or -1 end

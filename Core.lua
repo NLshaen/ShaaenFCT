@@ -129,8 +129,8 @@ local defaults = {
  uiColorStyle='ember', settingsSection='general', windowScale=100, windowOpacity=100,
  outline=true, size=27, critScale=1.5, duration=.9, startY=22,
  rise=65, arc=65, curve=40, fade=55, direction='alternate', animationStyle='arc',
- popupDirection='alternate', floatDirection='alternate', bounceDirection='alternate',
- verticalDirection='up', popupVerticalDirection='up', floatVerticalDirection='up', bounceVerticalDirection='up',
+ popupDirection='alternate', floatDirection='alternate', bounceDirection='alternate', powDirection='alternate',
+ verticalDirection='up', popupVerticalDirection='up', floatVerticalDirection='up', bounceVerticalDirection='up', powVerticalDirection='up',
  -- Pixel offsets are independent for each animation style and hit category.
  arcNormalX=0, arcNormalY=0, arcCritX=0, arcCritY=0,
  popupNormalX=0, popupNormalY=0, popupCritX=0, popupCritY=0,
@@ -1007,7 +1007,7 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
  if not ok then fs:Hide();fs:SetParent(UIParent);pool[#pool+1]=fs;return false end
  -- A different direction can be selected for each animation profile.
  -- Only user settings (never secret combat values) are inspected here.
- local directionKey=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'})[mode] or 'direction'
+ local directionKey=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection',pow='powDirection'})[mode] or 'direction'
  local choice=db[directionKey] or 'alternate'
  directionIndex=directionIndex+1
  local dir
@@ -1015,7 +1015,7 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
  elseif choice=='right' then dir=1
  elseif choice=='random' then dir=(math.random(2)==1) and -1 or 1
  else dir=(directionIndex%2==0) and 1 or -1 end
- local verticalKey=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'})[mode] or 'verticalDirection'
+ local verticalKey=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection',pow='powVerticalDirection'})[mode] or 'verticalDirection'
  local verticalChoice=db[verticalKey] or 'up'
  local vdir=1
  if verticalChoice=='down' then vdir=-1
@@ -2297,7 +2297,7 @@ local function createWindow()
   popup={'popupDuration','popupStartY','popupRise','popupPeak','popupIn','popupHold','popupFade','popupTravel','popupDirection','popupVerticalDirection'},
   float={'floatDuration','floatStartY','floatRise','floatDrift','floatSway','floatFade','floatDirection','floatVerticalDirection'},
   bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'},
-  pow={'powEnabled','powDuration','powStartY','powRise','powTravel','powFade','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale'}
+  pow={'powEnabled','powDuration','powStartY','powRise','powTravel','powFade','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale','powDirection','powVerticalDirection'}
  }
  for style,keys in pairs(profiles) do
   for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
@@ -2332,7 +2332,7 @@ local function createWindow()
   end)
   local p=CreateFrame('Frame',nil,animation)
   p:SetAllPoints(animation);p:Hide();subTabs[key]=p
-  label(p,subDescriptions[key],220,-352,11,.67,.71,.77)
+  if key~='pow' then label(p,subDescriptions[key],220,-352,11,.67,.71,.77) end
   local separator=fixedTexture(p,'TOPLEFT',460,-378,1,322,.25,.28,.33,.8)
   addResponsive(function(extra) anchorTopLeft(separator,p,460+extra/2,-378) end)
   label(p,'MOTION / TIMING',222,-382,11,1,.63,.35)
@@ -2353,15 +2353,15 @@ local function createWindow()
  compactSlider(arcPane,'fade','Fade starts at',222,-588,' %')
  -- Horizontal and vertical direction selectors for each animation profile.
  -- Dropdown menus open upwards, so the 760px minimum window does not clip them.
- local directionFields={arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'}
- local verticalFields={arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'}
+ local directionFields={arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection',pow='powDirection'}
+ local verticalFields={arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection',pow='powVerticalDirection'}
  local function redrawDirection(style)
   for _,entry in pairs(directionMenus[style] or {}) do
    local value=db[entry.field] or entry.default
    entry.trigger.caption:SetText(entry.title..': '..string.upper(value))
   end
  end
- for _,style in ipairs({'arc','popup','float','bounce'}) do
+ for _,style in ipairs({'arc','popup','float','bounce','pow'}) do
   local parent=subTabs[style]
   directionMenus[style]={}
   local function makeSelector(axis,title,field,y,options,default)
@@ -2445,7 +2445,8 @@ local function createWindow()
  compactSlider(powPane,'powMidScale','Mid scale',222,-619,'x')
  compactSlider(powPane,'powEndScale','End scale',222,-646,'x')
  local powToggle
- powToggle=toggleRow(powPane,'Enable POW on critical hits',-688,function()
+ -- Place the switch in POW's subtitle strip: the footer begins at y=-704.
+ powToggle=toggleRow(powPane,'Enable POW on critical hits',-347,function()
   db.powEnabled=not db.powEnabled
   powToggle:RefreshSwitch(db.powEnabled)
   if animationPreview then animationPreview:Refresh(true) end
@@ -2460,8 +2461,8 @@ local function createWindow()
     if widget.edit then widget.edit:SetText(string.format('%d',defaults[key])) end
    end
   end
-  if db.animationStyle=='pow' then powToggle:RefreshSwitch(db.powEnabled)
-  else redrawDirection(db.animationStyle) end
+  if db.animationStyle=='pow' then powToggle:RefreshSwitch(db.powEnabled) end
+  redrawDirection(db.animationStyle)
   if animationPreview then animationPreview:Refresh(true) end
  end)
  local previewStyleButton=button(animation,'PREVIEW STYLE',469,-262,250,32,function()
@@ -2705,12 +2706,12 @@ engine:SetScript('OnEvent',function(_,event,...)
   db.windowScale=math.max(75,math.min(120,math.floor(db.windowScale+.5)))
   if type(db.windowOpacity)~='number' or db.windowOpacity~=db.windowOpacity then db.windowOpacity=100 end
   db.windowOpacity=math.max(30,math.min(100,math.floor(db.windowOpacity+.5)))
-  for _,field in ipairs({'direction','popupDirection','floatDirection','bounceDirection'}) do
+  for _,field in ipairs({'direction','popupDirection','floatDirection','bounceDirection','powDirection'}) do
    if db[field]~='alternate' and db[field]~='left' and db[field]~='right' and db[field]~='random' then
     db[field]='alternate'
    end
   end
-  for _,field in ipairs({'verticalDirection','popupVerticalDirection','floatVerticalDirection','bounceVerticalDirection'}) do
+  for _,field in ipairs({'verticalDirection','popupVerticalDirection','floatVerticalDirection','bounceVerticalDirection','powVerticalDirection'}) do
    if db[field]~='up' and db[field]~='down' and db[field]~='alternate' and db[field]~='random' then db[field]='up' end
   end
   if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' and db.animationStyle~='pow' then db.animationStyle='arc' end
