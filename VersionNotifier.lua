@@ -168,7 +168,7 @@ end
 
 -- Public entry point for /sfct versiontest. Does not update SavedVariables.
 _G.ShaaenFCTTestUpdatePopup = function()
- showVersion('0.7.48', true)
+ showVersion('0.7.49', true)
 end
 
 local function acceptVersion(version)

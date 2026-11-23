@@ -1,7 +1,7 @@
-shaaenFCT 0.7.47 | WoW Forever (Interface 16001)
+shaaenFCT 0.7.48 | WoW Forever (Interface 16001)
 ===================================
 
-UNPUBLISHED LOCAL CHANGES (5 SEPARATE COMMITS, NO TAG OR PUSH)
+NEW IN v0.7.48
 ==============================================================
 - All switch rows now use matching, interface-font-aware ON/OFF typography.
 - New VersionNotifier.lua warns about a newer addon version learned from
@@ -27,9 +27,9 @@ UNPUBLISHED LOCAL CHANGES (5 SEPARATE COMMITS, NO TAG OR PUSH)
   WoW Forever may still draw some XP notices as world text without any
   supported CVar; these cannot be guaranteed hidden via addon CVars.
   Unrelated XP bar CVars are never modified.
-- The addon version stays 0.7.47. No GitHub tag/release/push was created.
+- Published in v0.7.48 with nine separate feature commits.
 
-LOCAL FEATURE BRANCH 0.7.47  (not pushed to GitHub)
+PREVIOUS FEATURES FROM v0.7.47
 - Settings > General: clickable on/off switches for addon, Coverage,
   Blizzard, All, Combat Log, own-pet target tracking and Overkill. Combat
   sources are mutually exclusive; turning off a selected source switches to
