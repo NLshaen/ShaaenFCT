@@ -1,0 +1,1236 @@
+From 161ca8d51e602e2d6008e3a5afd1d5b69619f2d2 Mon Sep 17 00:00:00 2001
+From: Local ShaaenFCT Preview <local-preview@example.invalid>
+Date: Sun, 22 Nov 2026 12:07:06 +0000
+Subject: [PATCH 1/9] ui: simplify top bar label to Scale
+
+---
+ Core.lua | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Core.lua b/Core.lua
+index f269ab0..94dd797 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -1788,7 +1788,7 @@ local function createWindow()
+   sliderGroups[#sliderGroups+1]={heading=heading,value=current,slider=slider}
+   if key=='windowScale' then w._scaleSlider=slider else w._opacitySlider=slider end
+  end
+- topSlider('windowScale','WINDOW SCALE',75,120,function(n) w:SetScale(n/100) end)
++ topSlider('windowScale','SCALE',75,120,function(n) w:SetScale(n/100) end)
+  topSlider('windowOpacity','OPACITY',0,100,function(n) w:SetAlpha(n/100) end)
+  local function positionTopSliders()
+   local available=math.max(420,(w:GetWidth() or minWidth)-299)
+-- 
+2.47.3
+
+
+From f5e1267a7a94fded14108b94a94f2ef4bc3ac34e Mon Sep 17 00:00:00 2001
+From: Local ShaaenFCT Preview <local-preview@example.invalid>
+Date: Sun, 22 Nov 2026 12:07:07 +0000
+Subject: [PATCH 2/9] ui: limit window opacity to 30-100 percent
+
+---
+ Core.lua | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Core.lua b/Core.lua
+index 94dd797..f18ac14 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -1789,7 +1789,7 @@ local function createWindow()
+   if key=='windowScale' then w._scaleSlider=slider else w._opacitySlider=slider end
+  end
+  topSlider('windowScale','SCALE',75,120,function(n) w:SetScale(n/100) end)
+- topSlider('windowOpacity','OPACITY',0,100,function(n) w:SetAlpha(n/100) end)
++ topSlider('windowOpacity','OPACITY',30,100,function(n) w:SetAlpha(n/100) end)
+  local function positionTopSliders()
+   local available=math.max(420,(w:GetWidth() or minWidth)-299)
+   local gap=22
+@@ -2581,7 +2581,7 @@ engine:SetScript('OnEvent',function(_,event,...)
+   if type(db.windowScale)~='number' or db.windowScale~=db.windowScale then db.windowScale=100 end
+   db.windowScale=math.max(75,math.min(120,math.floor(db.windowScale+.5)))
+   if type(db.windowOpacity)~='number' or db.windowOpacity~=db.windowOpacity then db.windowOpacity=100 end
+-  db.windowOpacity=math.max(0,math.min(100,math.floor(db.windowOpacity+.5)))
++  db.windowOpacity=math.max(30,math.min(100,math.floor(db.windowOpacity+.5)))
+   for _,field in ipairs({'direction','popupDirection','floatDirection','bounceDirection'}) do
+    if db[field]~='alternate' and db[field]~='left' and db[field]~='right' and db[field]~='random' then
+     db[field]='alternate'
+-- 
+2.47.3
+
+
+From 3a5f4607aeafb72dcd0f6c78e4ccfb5d450df858 Mon Sep 17 00:00:00 2001
+From: ShaaenFCT Local Changes <local-changes@localhost>
+Date: Mon, 23 Nov 2026 17:25:13 +0000
+Subject: [PATCH 3/9] ui: unify typography of all ON/OFF switch sliders
+
+---
+ Core.lua | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/Core.lua b/Core.lua
+index f18ac14..81363ed 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -1515,24 +1515,27 @@ local function toggleRow(parent,caption,y,onClick)
+  row.caption:ClearAllPoints()
+  row.caption:SetPoint('LEFT',row,'LEFT',14,0)
+  row.caption:SetJustifyH('LEFT')
++ -- Shared ON/OFF slider typography for every addon settings row. This uses
++ -- the selectable interface font, including any LibSharedMedia font choice.
+  local track=CreateFrame('Frame',nil,row)
+- track:SetSize(57,23);track:SetPoint('RIGHT',row,'RIGHT',-10,0)
++ track:SetSize(68,24);track:SetPoint('RIGHT',row,'RIGHT',-11,0)
+  local bg=track:CreateTexture(nil,'ARTWORK')
+  bg:SetAllPoints(track)
+  local knob=track:CreateTexture(nil,'OVERLAY')
+- knob:SetSize(17,17)
+- local onText=track:CreateFontString(nil,'OVERLAY','GameFontNormalSmall')
++ knob:SetSize(19,19)
++ local onText=track:CreateFontString(nil,'OVERLAY')
+  onText:SetPoint('CENTER',track,'CENTER',0,0)
+- onText:SetTextColor(1,1,1)
++ trackUI(onText,11)
+  function row:RefreshSwitch(on)
+   local skin=currentUISkin()
+-  tintTexture(bg,on and skin.accent or {.29,.33,.40},1)
+-  tintTexture(knob,{.96,.97,.98},1)
++  tintTexture(bg,on and skin.accent or {.26,.30,.37},1)
++  tintTexture(knob,{.97,.98,1},1)
+   knob:ClearAllPoints()
+   knob:SetPoint(on and 'RIGHT' or 'LEFT',track,on and 'RIGHT' or 'LEFT',on and -3 or 3,0)
+   onText:SetText(on and 'ON' or 'OFF')
++  onText:SetTextColor(on and .16 or .96,on and .18 or .97,on and .22 or .99)
+   onText:ClearAllPoints()
+-  onText:SetPoint('CENTER',track,'CENTER',on and -9 or 9,0)
++  onText:SetPoint('CENTER',track,'CENTER',on and -12 or 12,0)
+  end
+  row._switchTrack=track
+  return row
+-- 
+2.47.3
+
+
+From 2ff5e7bb970009a00d85fdd3a8917d1d2804dd22 Mon Sep 17 00:00:00 2001
+From: ShaaenFCT Local Changes <local-changes@localhost>
+Date: Mon, 23 Nov 2026 17:25:42 +0000
+Subject: [PATCH 4/9] feat: show GitHub release link when a newer peer addon
+ version is detected
+
+---
+ Core.lua            |   6 +
+ VersionNotifier.lua | 273 ++++++++++++++++++++++++++++++++++++++++++++
+ shaaenFCT.toc       |   1 +
+ 3 files changed, 280 insertions(+)
+ create mode 100644 VersionNotifier.lua
+
+diff --git a/Core.lua b/Core.lua
+index 81363ed..3d31b23 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -2838,6 +2838,12 @@ SlashCmdList.SHAAENFCT=function(msg)
+   end
+   return
+  end
++ if msg=='versiontest' and type(_G.ShaaenFCTTestUpdatePopup)=='function' then
++  _G.ShaaenFCTTestUpdatePopup();return
++ end
++ if msg=='versioncheck' and type(_G.ShaaenFCTCheckPeerVersion)=='function' then
++  _G.ShaaenFCTCheckPeerVersion();say('Checked known peer versions; GitHub release status requires a browser.');return
++ end
+  if msg=='ui reset' or msg=='windowreset' then
+   db.windowScale=100;db.windowOpacity=100
+   if window then
+diff --git a/VersionNotifier.lua b/VersionNotifier.lua
+new file mode 100644
+index 0000000..fba1439
+--- /dev/null
++++ b/VersionNotifier.lua
+@@ -0,0 +1,273 @@
++-- shaaenFCT: in-game GitHub Releases update prompt learned from addon version exchanges.
++-- WoW addons cannot make HTTP requests to GitHub. The popup is only triggered
++-- after detecting another player running a newer version; publication must
++-- be confirmed at the official GitHub Releases page.
++local ADDON = ...
++local PREFIX = 'SHFCTVER'
++local GITHUB_URL = 'https://github.com/NLshaen/ShaaenFCT/releases/latest'
++local frame = CreateFrame('Frame')
++local popup, versionLabel, currentLabel, urlBox
++local popupVersion, pendingVersion
++local sessionNotified, repliedTo = {}, {}
++local registered, lastBroadcast = false, -1000
++
++local function localVersion()
++ local name = ADDON or 'shaaenFCT'
++ if C_AddOns and type(C_AddOns.GetAddOnMetadata) == 'function' then
++  local ok, value = pcall(C_AddOns.GetAddOnMetadata, name, 'Version')
++  if ok and type(value) == 'string' then return value end
++ end
++ if type(GetAddOnMetadata) == 'function' then
++  local ok, value = pcall(GetAddOnMetadata, name, 'Version')
++  if ok and type(value) == 'string' then return value end
++ end
++ return '0.0.0'
++end
++
++local function parseVersion(value)
++ if type(value) ~= 'string' or #value > 24 then return nil end
++ local text = value:match('^v?(%d+%.%d+%.%d+)$')
++           or value:match('^v?(%d+%.%d+%.%d+%.%d+)$')
++ if not text then return nil end
++ local components = {}
++ for number in text:gmatch('%d+') do
++  components[#components + 1] = tonumber(number)
++ end
++ return components, text
++end
++
++local function isNewer(candidate, installed)
++ local a = parseVersion(candidate)
++ local b = parseVersion(installed)
++ if not a or not b then return false end
++ for i = 1, 4 do
++  local x, y = a[i] or 0, b[i] or 0
++  if x ~= y then return x > y end
++ end
++ return false
++end
++
++local function saved()
++ if type(shaaenFCTDB) == 'table' then return shaaenFCTDB end
++ return nil
++end
++
++local function rectangle(parent, r, g, b, a)
++ local texture = parent:CreateTexture(nil, 'BACKGROUND')
++ texture:SetAllPoints(parent)
++ if texture.SetColorTexture then
++  texture:SetColorTexture(r, g, b, a or 1)
++ else
++  texture:SetTexture('Interface\\Buttons\\WHITE8X8')
++  texture:SetVertexColor(r, g, b, a or 1)
++ end
++ return texture
++end
++
++local function caption(parent, text, size, r, g, b)
++ local label = parent:CreateFontString(nil, 'OVERLAY')
++ label:SetFont('Fonts\\ARIALN.TTF', size or 13, 'OUTLINE')
++ label:SetText(text)
++ label:SetTextColor(r or 1, g or 1, b or 1)
++ return label
++end
++
++local function makeButton(parent, text, left, action)
++ local button = CreateFrame('Button', nil, parent)
++ button:SetSize(116, 29)
++ button:SetPoint('BOTTOMLEFT', parent, 'BOTTOMLEFT', left, 16)
++ rectangle(button, .17, .19, .24, 1)
++ local label = caption(button, text, 12, 1, .74, .48)
++ label:SetPoint('CENTER', button, 'CENTER')
++ button:SetScript('OnClick', action)
++ return button
++end
++
++local function createPopup()
++ if popup then return popup end
++ local p = CreateFrame('Frame', 'ShaaenFCTUpdateNotice', UIParent)
++ p:SetSize(460, 242)
++ p:SetPoint('CENTER', UIParent, 'CENTER', 0, 75)
++ p:SetFrameStrata('DIALOG')
++ p:EnableMouse(true)
++ p:SetMovable(true)
++ if p.SetClampedToScreen then p:SetClampedToScreen(true) end
++ p:RegisterForDrag('LeftButton')
++ p:SetScript('OnDragStart', function(self) self:StartMoving() end)
++ p:SetScript('OnDragStop', function(self) self:StopMovingOrSizing() end)
++ rectangle(p, .068, .080, .105, .985)
++ local stripe = p:CreateTexture(nil, 'ARTWORK')
++ stripe:SetPoint('TOPLEFT', p, 'TOPLEFT', 0, 0)
++ stripe:SetPoint('TOPRIGHT', p, 'TOPRIGHT', 0, 0)
++ stripe:SetHeight(3)
++ if stripe.SetColorTexture then stripe:SetColorTexture(.96, .52, .27, 1)
++ else stripe:SetTexture('Interface\\Buttons\\WHITE8X8');stripe:SetVertexColor(.96, .52, .27, 1) end
++ local title = caption(p, 'SHAAENFCT  /  GITHUB VERSION CHECK', 17, 1, .64, .35)
++ title:SetPoint('TOPLEFT', p, 'TOPLEFT', 20, -18)
++ local subtitle = caption(p, 'A player has a newer build. Check for a GitHub release.', 13, .86, .89, .94)
++ subtitle:SetPoint('TOPLEFT', p, 'TOPLEFT', 20, -52)
++ currentLabel = caption(p, '', 13, .72, .77, .84)
++ currentLabel:SetPoint('TOPLEFT', p, 'TOPLEFT', 20, -81)
++ versionLabel = caption(p, '', 13, 1, .73, .47)
++ versionLabel:SetPoint('TOPLEFT', p, 'TOPLEFT', 240, -81)
++ local check = caption(p, 'Check GitHub Releases to confirm a published update:', 12, .80, .83, .88)
++ check:SetPoint('TOPLEFT', p, 'TOPLEFT', 20, -115)
++ local linkBg = CreateFrame('Frame', nil, p)
++ linkBg:SetPoint('TOPLEFT', p, 'TOPLEFT', 19, -139)
++ linkBg:SetSize(421, 27)
++ rectangle(linkBg, .12, .14, .18, 1)
++ local input = CreateFrame('EditBox', nil, linkBg)
++ input:SetSize(407, 25)
++ input:SetPoint('CENTER', linkBg, 'CENTER')
++ input:SetFont('Fonts\\ARIALN.TTF', 12, '')
++ input:SetTextColor(1, .70, .44)
++ input:SetAutoFocus(false)
++ input:SetMaxLetters(150)
++ input:SetText(GITHUB_URL)
++ input:SetScript('OnEscapePressed', function(self) self:ClearFocus() end)
++ input:SetScript('OnEditFocusGained', function(self) self:HighlightText() end)
++ input:SetScript('OnTextChanged', function(self, userInput)
++  if userInput then self:SetText(GITHUB_URL);self:HighlightText() end
++ end)
++ urlBox = input
++ local instruction = caption(p, 'Select the link and press Ctrl+C to copy.', 11, .58, .65, .72)
++ instruction:SetPoint('TOPLEFT', p, 'TOPLEFT', 20, -175)
++ makeButton(p, 'LATER', 19, function() p:Hide() end)
++ makeButton(p, 'COPY LINK', 171, function()
++  urlBox:SetFocus()
++  urlBox:HighlightText()
++ end)
++ makeButton(p, 'DISMISS', 324, function()
++  local db = saved()
++  if db and popupVersion then db.dismissedFCTGithubUpdateVersion = popupVersion end
++  p:Hide()
++ end)
++ p:Hide()
++ popup = p
++ return p
++end
++
++local function showVersion(version, previewOnly)
++ if not previewOnly then
++  if not isNewer(version, localVersion()) then return end
++  local db = saved()
++  if db and db.dismissedFCTGithubUpdateVersion == version then return end
++  if sessionNotified[version] then return end
++  if InCombatLockdown and InCombatLockdown() then
++   pendingVersion = version
++   return
++  end
++  sessionNotified[version] = true
++ end
++ popupVersion = previewOnly and nil or version
++ local p = createPopup()
++ currentLabel:SetText('INSTALLED:  v' .. localVersion())
++ versionLabel:SetText('PEER VERSION:  v' .. version .. (previewOnly and ' (PREVIEW)' or ''))
++ p:Show()
++end
++
++-- Public entry point for /sfct versiontest. Does not update SavedVariables.
++_G.ShaaenFCTTestUpdatePopup = function()
++ showVersion('0.7.48', true)
++end
++
++local function acceptVersion(version)
++ if not isNewer(version, localVersion()) then return end
++ local db = saved()
++ if not db then return end
++ if not isNewer(db.latestKnownFCTGithubVersion, version) then
++  db.latestKnownFCTGithubVersion = version
++ end
++ showVersion(db.latestKnownFCTGithubVersion)
++end
++
++local function registerPrefix()
++ if registered then return true end
++ local f = (C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix) or RegisterAddonMessagePrefix
++ if type(f) ~= 'function' then return false end
++ local ok, result = pcall(f, PREFIX)
++ registered = ok and result ~= false
++ return registered
++end
++
++local function transmit(channel, target)
++ if not registerPrefix() then return end
++ local f = (C_ChatInfo and C_ChatInfo.SendAddonMessage) or SendAddonMessage
++ if type(f) ~= 'function' then return end
++ pcall(f, PREFIX, 'V:' .. localVersion(), channel, target)
++end
++
++local function broadcast()
++ local now = (type(GetTime) == 'function' and GetTime()) or 0
++ if now - lastBroadcast < 30 then return end
++ lastBroadcast = now
++ if type(IsInGuild) == 'function' and IsInGuild() then transmit('GUILD') end
++ if type(IsInGroup) == 'function' and _G.LE_PARTY_CATEGORY_INSTANCE
++    and IsInGroup(_G.LE_PARTY_CATEGORY_INSTANCE) then
++  transmit('INSTANCE_CHAT')
++ elseif type(IsInRaid) == 'function' and IsInRaid() then
++  transmit('RAID')
++ elseif type(IsInGroup) == 'function' and IsInGroup() then
++  transmit('PARTY')
++ elseif type(GetNumRaidMembers) == 'function' and GetNumRaidMembers() > 0 then
++  transmit('RAID')
++ elseif type(GetNumPartyMembers) == 'function' and GetNumPartyMembers() > 0 then
++  transmit('PARTY')
++ end
++end
++
++-- Version check is a peer announcement, not a remote GitHub API request.
++_G.ShaaenFCTCheckPeerVersion = function()
++ local db = saved()
++ if db and isNewer(db.latestKnownFCTGithubVersion, localVersion()) then
++  showVersion(db.latestKnownFCTGithubVersion)
++ end
++ broadcast()
++end
++
++frame:RegisterEvent('ADDON_LOADED')
++frame:RegisterEvent('PLAYER_LOGIN')
++frame:RegisterEvent('PLAYER_REGEN_ENABLED')
++pcall(frame.RegisterEvent, frame, 'CHAT_MSG_ADDON')
++pcall(frame.RegisterEvent, frame, 'GROUP_ROSTER_UPDATE')
++frame:SetScript('OnEvent', function(_, event, ...)
++ if event == 'ADDON_LOADED' then
++  local name = ...
++  if name ~= ADDON and name ~= 'shaaenFCT' then return end
++  registerPrefix()
++ elseif event == 'PLAYER_LOGIN' then
++  registerPrefix()
++  local db = saved()
++  if db and isNewer(db.latestKnownFCTGithubVersion, localVersion()) then
++   showVersion(db.latestKnownFCTGithubVersion)
++  end
++  if C_Timer and type(C_Timer.After) == 'function' then
++   C_Timer.After(4, broadcast)
++  else
++   broadcast()
++  end
++ elseif event == 'PLAYER_REGEN_ENABLED' then
++  if pendingVersion then
++   local nextVersion = pendingVersion
++   pendingVersion = nil
++   showVersion(nextVersion)
++  end
++ elseif event == 'GROUP_ROSTER_UPDATE' then
++  broadcast()
++ elseif event == 'CHAT_MSG_ADDON' then
++  local prefix, payload, channel, sender = ...
++  if prefix ~= PREFIX or type(payload) ~= 'string' then return end
++  local version = payload:match('^V:(v?%d+[%d%.]*)$')
++  if not version or not parseVersion(version) then return end
++  if isNewer(version, localVersion()) then
++   acceptVersion(version)
++  elseif isNewer(localVersion(), version) and type(sender) == 'string' and sender ~= '' then
++   -- Help an older peer learn our version without re-broadcasting to everyone.
++   local key = sender .. ':' .. tostring(channel)
++   if not repliedTo[key] then
++    repliedTo[key] = true
++    transmit('WHISPER', sender)
++   end
++  end
++ end
++end)
+diff --git a/shaaenFCT.toc b/shaaenFCT.toc
+index 30b3092..8243ce3 100644
+--- a/shaaenFCT.toc
++++ b/shaaenFCT.toc
+@@ -10,3 +10,4 @@ PlayerDisplay.lua
+ AnimationPreview.lua
+ Core.lua
+ Integration.lua
++VersionNotifier.lua
+-- 
+2.47.3
+
+
+From 0c79322d6c4b8706799a5389e1a58b1d53073895 Mon Sep 17 00:00:00 2001
+From: ShaaenFCT Local Changes <local-changes@localhost>
+Date: Mon, 23 Nov 2026 17:27:40 +0000
+Subject: [PATCH 5/9] feat: add ClassicFCT-style two-stage POW crit animation
+ tab
+
+---
+ AnimationPreview.lua |  9 ++++--
+ Core.lua             | 76 ++++++++++++++++++++++++++++++++++++--------
+ shaaenFCT.toc        |  2 +-
+ 3 files changed, 70 insertions(+), 17 deletions(-)
+
+diff --git a/AnimationPreview.lua b/AnimationPreview.lua
+index 9bf6c00..a153bae 100644
+--- a/AnimationPreview.lua
++++ b/AnimationPreview.lua
+@@ -31,9 +31,14 @@ local function profile(db,critical)
+  local dir=critical and 1 or -1
+  if direction=='left' then dir=-1 elseif direction=='right' then dir=1
+  elseif direction=='random' then dir=math.random(2)==1 and -1 or 1 end
+- local hit={mode=mode,dir=dir,vdir=vdir,offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0,
++ local hit={mode=mode,dir=dir,vdir=vdir,critical=critical,offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0,
+   offsetY=db[mode..(critical and 'CritY' or 'NormalY')] or 0}
+- if mode=='popup' then
++ if mode=='pow' then
++  hit.duration=db.powDuration;hit.startY=db.powStartY;hit.fade=55
++  hit.powEnabled=db.powEnabled;hit.powPhaseDuration=db.powPhaseDuration
++  hit.powRatio=db.powRatio;hit.powInitScale=db.powInitScale
++  hit.powMidScale=db.powMidScale;hit.powEndScale=db.powEndScale
++ elseif mode=='popup' then
+   hit.duration=db.popupDuration;hit.startY=db.popupStartY;hit.rise=db.popupRise
+   hit.travel=db.popupTravel;hit.peak=db.popupPeak
+   hit.intro=db.popupIn/100;hit.hold=db.popupHold/100;hit.fade=db.popupFade
+diff --git a/Core.lua b/Core.lua
+index 3d31b23..b57a192 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -142,7 +142,11 @@ local defaults = {
+  floatDuration=1.15, floatStartY=32, floatRise=110,
+  floatDrift=24, floatSway=15, floatFade=56,
+  bounceDuration=1.0, bounceStartY=27, bounceHeight=62,
+- bouncePeak=1.5, bounceDecay=3.0, bounceFade=62, bounceTravel=28
++ bouncePeak=1.5, bounceDecay=3.0, bounceFade=62, bounceTravel=28,
++ -- ClassicFCT Pow defaults: 0.25 -> 1.55 -> 1, over 30% of a hit.
++ powEnabled=true, powDuration=.9, powStartY=22, powPhaseDuration=.30,
++ powRatio=.70, powInitScale=.25, powMidScale=1.55, powEndScale=1,
++ powNormalX=0, powNormalY=0, powCritX=0, powCritY=0
+ }
+ local ranges = {
+  duration={.3,2.5,.05,2}, startY={5,100,1,0}, rise={0,160,1,0},
+@@ -155,11 +159,15 @@ local ranges = {
+  floatDrift={0,120,1,0}, floatSway={0,80,1,0}, floatFade={0,95,1,0},
+  bounceDuration={.3,3,.05,2}, bounceStartY={5,110,1,0}, bounceHeight={0,150,1,0},
+  bouncePeak={1,2.5,.05,2}, bounceDecay={1,7,.25,2}, bounceFade={0,95,1,0},
+- bounceTravel={0,120,1,0}
++ bounceTravel={0,120,1,0},
++ powDuration={.3,3,.05,2}, powStartY={0,100,1,0},
++ powPhaseDuration={.01,1,.01,2}, powRatio={.01,.99,.01,2},
++ powInitScale={.1,5,.01,2}, powMidScale={.1,5,.01,2},
++ powEndScale={.1,5,.01,2}
+ }
+ -- Signed offsets are intentionally in pixels: left/down are negative.
+ -- Unlike secret combat amounts, these are normal user-provided numbers.
+-for _,style in ipairs({'arc','popup','float','bounce'}) do
++for _,style in ipairs({'arc','popup','float','bounce','pow'}) do
+  for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
+   ranges[style..suffix]={-250,250,1,0}
+  end
+@@ -605,7 +613,19 @@ local function verticalMotionY(hit,value)
+ end
+ local function profileMotionAt(hit,p)
+  local mode=hit.mode or 'arc'
+- if mode=='popup' then
++ if mode=='pow' then
++  -- ClassicFCT-style two-stage crit scale: start -> mid -> end. No copying
++  -- of third-party engine code, only the numerical behavior/default values.
++  local scale=1
++  if hit.powEnabled and hit.critical then
++   local phase=math.min(1,p/math.max(.01,hit.powPhaseDuration or .30))
++   local ratio=math.max(.01,math.min(.99,hit.powRatio or .70))
++   local a,b,c=hit.powInitScale or .25,hit.powMidScale or 1.55,hit.powEndScale or 1
++   if phase<ratio then scale=a+(b-a)*phase/ratio
++   else scale=b+(c-b)*(phase-ratio)/(1-ratio) end
++  end
++  return 0,hit.startY or 0,scale
++ elseif mode=='popup' then
+   local intro=math.max(.05,hit.intro or .18)
+   local hold=math.min(.9,hit.hold or .22)
+   local peak=hit.peak or 1.8
+@@ -905,7 +925,8 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
+  local initialY=db.startY
+  if db.animationStyle=='popup' then initialY=db.popupStartY
+  elseif db.animationStyle=='float' then initialY=db.floatStartY
+- elseif db.animationStyle=='bounce' then initialY=db.bounceStartY end
++ elseif db.animationStyle=='bounce' then initialY=db.bounceStartY
++ elseif db.animationStyle=='pow' then initialY=db.powStartY end
+  if isHeal then placePlayerHeal(fs,plate,offsetX,initialY+offsetY)
+  elseif detached and position then fs:SetPoint('CENTER',fxLayer,'BOTTOMLEFT',position.x+offsetX,position.y+initialY+offsetY)
+  elseif anchor then fs:SetPoint('CENTER',anchor,'CENTER',offsetX,initialY+offsetY)
+@@ -956,6 +977,8 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
+   duration,startY,rise,arc,curve,fade=db.bounceDuration,db.bounceStartY,db.bounceHeight,0,0,db.bounceFade
+   peak,decay=db.bouncePeak,db.bounceDecay
+   travel=db.bounceTravel
++ elseif mode=='pow' then
++  duration,startY,rise,arc,curve,fade=db.powDuration,db.powStartY,0,0,0,55
+  else mode='arc' end
+  fs:SetAlpha(1);fs:Show()
+  local prefix,suffix
+@@ -967,6 +990,9 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
+   duration=duration,startY=startY,rise=rise,arc=arc,curve=curve,fade=fade,
+   peak=peak,intro=intro,hold=hold,drift=drift,sway=sway,decay=decay,travel=travel,
+   offsetX=offsetX,offsetY=offsetY,
++  powEnabled=db.powEnabled,critical=critical,
++  powPhaseDuration=db.powPhaseDuration,powRatio=db.powRatio,
++  powInitScale=db.powInitScale,powMidScale=db.powMidScale,powEndScale=db.powEndScale,
+   baseSize=baseSize,fontName=fontName,lastScale=1,xp=isXP}
+  if not isNotice and not isHeal then
+   if blockKind then hit.statusLabel=createStatusLabel(fs,fontName,baseSize,'BLOCKED')
+@@ -2105,12 +2131,13 @@ local function createWindow()
+  -- ANIMATION / split controls: motion at left, normal and critical offsets at right.
+  header(animation,'Animation styles','Select a style and fine-tune its movement and hit positions')
+  local subTabs,subButtons={},{}
+- local subNames={arc='ARC',popup='POPUP',float='FLOAT',bounce='BOUNCE'}
++ local subNames={arc='ARC',popup='POPUP',float='FLOAT',bounce='BOUNCE',pow='POW'}
+  local subDescriptions={
+   arc='Curved rising trajectory with directional travel',
+   popup='Scale up, hold, then drift to either side and fade',
+   float='Smooth vertical rise with gentle horizontal sway',
+-  bounce='Springy rise with damping and directional drift'
++  bounce='Springy rise with damping and directional drift',
++  pow='ClassicFCT-inspired two-stage critical scale burst'
+  }
+  local animationSliders={}
+  if _G.ShaaenFCTAnimationPreview then
+@@ -2211,7 +2238,8 @@ local function createWindow()
+   arc={'duration','startY','rise','arc','curve','fade','direction','verticalDirection'},
+   popup={'popupDuration','popupStartY','popupRise','popupPeak','popupIn','popupHold','popupFade','popupTravel','popupDirection','popupVerticalDirection'},
+   float={'floatDuration','floatStartY','floatRise','floatDrift','floatSway','floatFade','floatDirection','floatVerticalDirection'},
+-  bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'}
++  bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'},
++  pow={'powEnabled','powDuration','powStartY','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale'}
+  }
+  for style,keys in pairs(profiles) do
+   for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
+@@ -2234,12 +2262,13 @@ local function createWindow()
+    b.stripe:SetAlpha(chosen and 1 or 0)
+   end
+  end
+- for idx,key in ipairs({'arc','popup','float','bounce'}) do
+-  local x=216+(idx-1)*127
+-  subButtons[key]=button(animation,subNames[key],x,-306,119,34,function() selectAnimationStyle(key) end)
++ for idx,key in ipairs({'arc','popup','float','bounce','pow'}) do
++  local tabWidth=(500-4*8)/5
++  local x=216+(idx-1)*(tabWidth+8)
++  subButtons[key]=button(animation,subNames[key],x,-306,tabWidth,34,function() selectAnimationStyle(key) end)
+   local animButton=subButtons[key]
+   addResponsive(function(extra)
+-   local width=(500+extra-24)/4
++   local width=(500+extra-4*8)/5
+    animButton:SetSize(width,34)
+    anchorTopLeft(animButton,animation,216+(idx-1)*(width+8),-306)
+   end)
+@@ -2343,6 +2372,23 @@ local function createWindow()
+  compactSlider(bouncePane,'bounceDecay','Damping',222,-551,'')
+  compactSlider(bouncePane,'bounceFade','Fade starts at',222,-588,' %')
+  compactSlider(bouncePane,'bounceTravel','Side travel',222,-625,' px')
++ -- POW uses the five original ClassicFCT scale/time parameters with the same
++ -- defaults, plus an independent overall duration and starting height.
++ local powPane=subTabs.pow
++ compactSlider(powPane,'powDuration','Total duration',222,-403,' s')
++ compactSlider(powPane,'powStartY','Starting height',222,-440,' px')
++ compactSlider(powPane,'powPhaseDuration','Pow duration ratio',222,-477,'')
++ compactSlider(powPane,'powRatio','In / Out ratio',222,-514,'')
++ compactSlider(powPane,'powInitScale','Start scale',222,-551,'x')
++ compactSlider(powPane,'powMidScale','Mid scale',222,-588,'x')
++ compactSlider(powPane,'powEndScale','End scale',222,-625,'x')
++ local powToggle
++ powToggle=toggleRow(powPane,'Enable POW on critical hits',-665,function()
++  db.powEnabled=not db.powEnabled
++  powToggle:RefreshSwitch(db.powEnabled)
++  if animationPreview then animationPreview:Refresh(true) end
++ end)
++ powToggle:RefreshSwitch(db.powEnabled)
+  local resetStyleButton=button(animation,'RESET THIS STYLE',220,-262,235,32,function()
+   for _,key in ipairs(profiles[db.animationStyle] or profiles.arc) do db[key]=defaults[key] end
+   for _,key in ipairs(profiles[db.animationStyle] or profiles.arc) do
+@@ -2352,7 +2398,8 @@ local function createWindow()
+     if widget.edit then widget.edit:SetText(string.format('%d',defaults[key])) end
+    end
+   end
+-  redrawDirection(db.animationStyle)
++  if db.animationStyle=='pow' then powToggle:RefreshSwitch(db.powEnabled)
++  else redrawDirection(db.animationStyle) end
+   if animationPreview then animationPreview:Refresh(true) end
+  end)
+  local previewStyleButton=button(animation,'PREVIEW STYLE',469,-262,250,32,function()
+@@ -2593,7 +2640,8 @@ engine:SetScript('OnEvent',function(_,event,...)
+   for _,field in ipairs({'verticalDirection','popupVerticalDirection','floatVerticalDirection','bounceVerticalDirection'}) do
+    if db[field]~='up' and db[field]~='down' and db[field]~='alternate' and db[field]~='random' then db[field]='up' end
+   end
+-  if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' then db.animationStyle='arc' end
++  if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' and db.animationStyle~='pow' then db.animationStyle='arc' end
++ if type(db.powEnabled)~='boolean' then db.powEnabled=true end
+   -- v0.7.42 removes the selectable Smart mode. Keep player / all choices.
+   if db.damageSource~='coverage' and db.damageSource~='player' and db.damageSource~='all' then db.damageSource='coverage' end
+   db.settingsVersion=9
+diff --git a/shaaenFCT.toc b/shaaenFCT.toc
+index 8243ce3..da3703d 100644
+--- a/shaaenFCT.toc
++++ b/shaaenFCT.toc
+@@ -1,6 +1,6 @@
+ ## Interface: 16001
+ ## Title: shaaenFCT
+-## Notes: Personal floating combat text with Coverage filtering, four animation styles, per-style direction, independent offsets and a searchable font picker.
++## Notes: Personal floating combat text with Coverage filtering, five animation styles (Arc, Popup, Float, Bounce, Pow), per-style direction, independent offsets and a searchable font picker.
+ ## Version: 0.7.47
+ ## SavedVariables: shaaenFCTDB
+ Libs/FontMedia.lua
+-- 
+2.47.3
+
+
+From b5149903d691a5a60a1839322fa6ff82ba9b15de Mon Sep 17 00:00:00 2001
+From: ShaaenFCT Local Changes <local-changes@localhost>
+Date: Mon, 23 Nov 2026 17:27:47 +0000
+Subject: [PATCH 6/9] ui: rename Blizzard Native combat text mode to Blizzard
+ FCT
+
+---
+ Core.lua | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Core.lua b/Core.lua
+index b57a192..e7278e2 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -1866,7 +1866,7 @@ local function createWindow()
+  end)
+  section(general,'COMBAT TEXT MODE',-259)
+  local choices={}
+- local sourceNames={coverage='Coverage  /  Melee, spells, DoT, heals, XP',player='Blizzard  /  Native damage',all='All damage  /  Unfiltered'}
++ local sourceNames={coverage='Coverage  /  Melee, spells, DoT, heals, XP',player='Blizzard FCT',all='All damage  /  Unfiltered'}
+  local function sourceChoice(key,y)
+   local row=toggleRow(general,sourceNames[key],y,function()
+    -- Sources are mutually exclusive. Turning a selected non-Coverage source
+@@ -2461,7 +2461,7 @@ local function createWindow()
+  label(help,'/sfct                 Open / close settings',220,-377,12)
+  label(help,'/sfct open            Open settings',220,-405,12)
+  label(help,'/sfct source coverage  Melee, spells, DoT, heal and XP',220,-433,12)
+- label(help,'/sfct source player   Blizzard native damage',220,-461,12)
++ label(help,'/sfct source player   Blizzard FCT',220,-461,12)
+  label(help,'/sfct source all      Unfiltered damage',220,-489,12)
+  label(help,'/sfct status          Compact status',220,-517,12)
+  label(help,'/sfct plate traffic  Damage routing counts',220,-545,12)
+@@ -2807,7 +2807,7 @@ SlashCmdList.SHAAENFCT=function(msg)
+   db.plateDisplayEnabled=true;return
+  end
+  if msg=='source smart' or msg=='source experimental' then setSource('coverage');say('SMART mode was removed; using COVERAGE.');return end
+- if msg=='source player' or msg=='source moi' then setSource('player');say('Blizzard source: your damage only');return end
++ if msg=='source player' or msg=='source moi' then setSource('player');say('Blizzard FCT: native floating combat text');return end
+  if msg=='source all' or msg=='source tous' then setSource('all');say('Addon source: all damage (including other players)');return end
+  if msg=='source' then say('Current source: '..db.damageSource);return end
+  if msg=='plate on' or msg=='plate off' then
+-- 
+2.47.3
+
+
+From f9f34390dbd654b8acfb5a9e5ef22336beb9b463 Mon Sep 17 00:00:00 2001
+From: ShaaenFCT Local Changes <local-changes@localhost>
+Date: Mon, 23 Nov 2026 17:29:33 +0000
+Subject: [PATCH 7/9] fix: disable supported Blizzard FCT CVars including XP
+ when OFF
+
+---
+ Core.lua   | 100 ++++++++++++++++++++++++++++++++++++++++-------------
+ README.txt |  23 ++++++++++++
+ 2 files changed, 99 insertions(+), 24 deletions(-)
+
+diff --git a/Core.lua b/Core.lua
+index e7278e2..827bc2d 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -398,26 +398,76 @@ local function clearQueues()
+  foreignKillPlates=setmetatable({}, {__mode='k'})
+  confirmedPersonalKills=setmetatable({}, {__mode='k'})
+ end
+-local function enableNative()
+- local key='floatingCombatTextCombatDamage_v2'
++-- Blizzard's floating text has many independent CVars. Disable only supported
++-- boolean switches, including XP aliases. Some Forever world-space XP notices
++-- may have no public suppressible CVar: never modify unrelated XP UI settings.
++local nativeFCTFlags={
++ 'enableFloatingCombatText',
++ 'floatingCombatTextCombatDamage', 'floatingCombatTextCombatHealing',
++ 'floatingCombatTextCombatHealingAbsorbSelf', 'floatingCombatTextCombatHealingAbsorbTarget',
++ 'floatingCombatTextCombatLogPeriodicSpells',
++ 'floatingCombatTextCombatDamageAllAutos','floatingCombatTextCombatDamageAllHits',
++ 'floatingCombatTextPetMeleeDamage','floatingCombatTextPetSpellDamage',
++ 'floatingCombatTextAuras','floatingCombatTextDodgeParryMiss',
++ 'floatingCombatTextDamageReduction','floatingCombatTextRepChanges',
++ 'floatingCombatTextEnergyGains','floatingCombatTextPeriodicEnergyGains',
++ 'floatingCombatTextComboPoints','floatingCombatTextHonorGains',
++ 'floatingCombatTextLowManaHealth','floatingCombatTextReactiveAbilities',
++ 'floatingCombatTextFriendlyHealers','floatingCombatTextCombatState',
++ 'floatingCombatTextSpellMechanics','floatingCombatTextSpellMechanicsOther',
++ 'floatingCombatTextXPChanges','floatingCombatTextExperienceGained',
++ 'floatingCombatTextExperienceGains','floatingCombatTextExperience'
++}
++local function nativeGet(key)
+  local get=GetCVar or (C_CVar and C_CVar.GetCVar)
++ if type(get)~='function' then return nil end
++ local ok,value=pcall(get,key)
++ -- Unknown / protected / numerical mode CVars must not be overwritten.
++ if ok and (value=='0' or value=='1') then return value end
++end
++local function nativeSet(key,value)
+  local set=SetCVar or (C_CVar and C_CVar.SetCVar)
+- if type(get)=='function' then
+-  local ok,value=pcall(get,key)
+-  if ok and value=='1' then return end
+- end
+- if type(set)=='function' then
+-  local ok=pcall(set,key,'1')
+-  if ok then return end
+- end
+- if not filterWarned then
+-  filterWarned=true
+-  say('Unable to enable Blizzard combat text automatically: /console floatingCombatTextCombatDamage_v2 1')
++ if type(set)~='function' then return false end
++ local ok=pcall(set,key,value)
++ return ok
++end
++local function eachNativeFlag(callback)
++ for _,base in ipairs(nativeFCTFlags) do
++  -- Forever has moved most combat text switches to *_v2, but not all.
++  local v2=base..'_v2'
++  if nativeGet(v2)~=nil then callback(v2) end
++  if nativeGet(base)~=nil then callback(base) end
+  end
+ end
+ local function disableNative()
+- local set=SetCVar or (C_CVar and C_CVar.SetCVar)
+- if type(set)=='function' then pcall(set,'floatingCombatTextCombatDamage_v2','0') end
++ if not db then return end
++ db.nativeFCTBackup=type(db.nativeFCTBackup)=='table' and db.nativeFCTBackup or {}
++ eachNativeFlag(function(key)
++  local before=nativeGet(key)
++  if before~=nil then
++   -- Capture once. Never replace a user's original ON value with our own OFF.
++   if db.nativeFCTBackup[key]==nil then db.nativeFCTBackup[key]=before end
++   if before~='0' then nativeSet(key,'0') end
++  end
++ end)
++end
++local function enableNative()
++ if not db then return end
++ eachNativeFlag(function(key)
++  local saved=db.nativeFCTBackup and db.nativeFCTBackup[key]
++  if saved=='0' or saved=='1' then nativeSet(key,saved) end
++ end)
++ -- Native mode must always actually display Blizzard damage numbers even
++ -- when first installed with that setting already disabled.
++ if nativeGet('floatingCombatTextCombatDamage_v2')~=nil then
++  nativeSet('floatingCombatTextCombatDamage_v2','1')
++ elseif nativeGet('floatingCombatTextCombatDamage')~=nil then
++  nativeSet('floatingCombatTextCombatDamage','1')
++ elseif not filterWarned then
++  filterWarned=true
++  say('Blizzard FCT damage CVar is unavailable on this client.')
++ end
++ if nativeGet('enableFloatingCombatText')~=nil then nativeSet('enableFloatingCombatText','1') end
+ end
+ local function enableFilteredLog()
+  if not db or db.combatLogEnabled==false then return end
+@@ -430,7 +480,7 @@ local function setSource(source)
+  db.damageSource=source
+  if source=='coverage' then db.plateDisplayEnabled=true end
+  clearNumbers();clearQueues()
+- if db.enabled and source=='player' then enableNative() else disableNative() end
++ if source=='player' then enableNative() else disableNative() end
+  if source=='coverage' then enableFilteredLog() end
+ end
+ -- Do not read, compare, stringify or calculate with protected combat amounts.
+@@ -1860,8 +1910,8 @@ local function createWindow()
+  local enabled=toggleRow(general,'Enable addon',-216,function()
+   db.enabled=not db.enabled
+   clearNumbers();clearQueues()
+-  if not db.enabled or db.damageSource=='player' then enableNative()
+-  else disableNative();if db.damageSource=='coverage' then enableFilteredLog() end end
++  if db.damageSource=='player' then enableNative()
++  else disableNative();if db.enabled and db.damageSource=='coverage' then enableFilteredLog() end end
+   refreshGeneral()
+  end)
+  section(general,'COMBAT TEXT MODE',-259)
+@@ -2645,17 +2695,17 @@ engine:SetScript('OnEvent',function(_,event,...)
+   -- v0.7.42 removes the selectable Smart mode. Keep player / all choices.
+   if db.damageSource~='coverage' and db.damageSource~='player' and db.damageSource~='all' then db.damageSource='coverage' end
+   db.settingsVersion=9
+-  if db.enabled then
+-   if db.damageSource=='player' then enableNative() else disableNative() end
+-   if db.damageSource=='coverage' then enableFilteredLog() end
+-  end
++  if db.damageSource=='player' then enableNative() else disableNative() end
++  if db.enabled and db.damageSource=='coverage' then enableFilteredLog() end
+   say('v'..addonVersion()..' loaded / '..db.damageSource..' mode /sfct')
+  elseif event=='PLAYER_LOGIN' then
+   xpPrevious,xpPreviousMax=snapshotXP()
+   if db and db.enabled and db.damageSource=='coverage' then enableFilteredLog() end
+  elseif event=='PLAYER_ENTERING_WORLD' or event=='PLAYER_REGEN_ENABLED' then
+   if event=='PLAYER_ENTERING_WORLD' then xpPrevious,xpPreviousMax=snapshotXP() end
+-  if db and db.enabled and db.damageSource=='player' then enableNative() end
++  if db then
++   if db.damageSource=='player' then enableNative() else disableNative() end
++  end
+  elseif event=='PLAYER_XP_UPDATE' then
+   showXPUpdate()
+  elseif event=='UNIT_SPELLCAST_SUCCEEDED' then
+@@ -2910,7 +2960,9 @@ SlashCmdList.SHAAENFCT=function(msg)
+  end
+  if msg=='open' or msg=='options' then createWindow():Show();return end
+  if msg=='close' then if window then window:Hide() end;return end
+- if msg=='off' then db.enabled=false;clearNumbers();clearQueues();enableNative();say('disabled');return end
++  if msg=='off' then db.enabled=false;clearNumbers();clearQueues();
++   if db.damageSource=='player' then enableNative() else disableNative() end
++   say('disabled');return end
+  if msg=='on' then db.enabled=true;setSource(db.damageSource);say('enabled');return end
+  local w=createWindow()
+  if w:IsShown() then w:Hide() else w:Show() end
+diff --git a/README.txt b/README.txt
+index ada291f..5299a16 100644
+--- a/README.txt
++++ b/README.txt
+@@ -1,6 +1,29 @@
+ shaaenFCT 0.7.47 | WoW Forever (Interface 16001)
+ ===================================
+ 
++UNPUBLISHED LOCAL CHANGES (5 SEPARATE COMMITS, NO TAG OR PUSH)
++==============================================================
++- All switch rows now use matching, interface-font-aware ON/OFF typography.
++- New VersionNotifier.lua warns about a newer addon version learned from
++  another player via WoW addon messages, then offers the GitHub Releases
++  URL (https://github.com/NLshaen/ShaaenFCT/releases/latest).
++  IMPORTANT: WoW does not provide addons with direct HTTP requests. Peer
++  announcements do NOT independently verify that GitHub published a release.
++  Use /sfct versiontest for a demo popup, or /sfct versioncheck to re-check
++  known peer versions and announce your installed build.
++- Animation > POW is a fifth tab with ClassicFCT-style two-stage scaling
++  on critical hits. ClassicFCT defaults: Start 0.25x, Mid 1.55x, End 1.00x,
++  POW duration ratio 0.30, In/Out ratio 0.70; all are adjustable. Overall
++  duration, initial height and independent normal/crit offsets are editable.
++- Settings > General > Blizzard FCT replaces Blizzard / Native damage.
++- While Blizzard FCT is OFF, supported native floating-combat-text CVars
++  are set to 0, including available experience-text aliases. The original
++  values are saved and restored when selecting Blizzard FCT again.
++  WoW Forever may still draw some XP notices as world text without any
++  supported CVar; these cannot be guaranteed hidden via addon CVars.
++  Unrelated XP bar CVars are never modified.
++- The addon version stays 0.7.47. No GitHub tag/release/push was created.
++
+ LOCAL FEATURE BRANCH 0.7.47  (not pushed to GitHub)
+ - Settings > General: clickable on/off switches for addon, Coverage,
+   Blizzard, All, Combat Log, own-pet target tracking and Overkill. Combat
+-- 
+2.47.3
+
+
+From b7df44943917ab9938ccb799354530d5f51685c3 Mon Sep 17 00:00:00 2001
+From: ShaaenFCT Local Changes <local-changes@localhost>
+Date: Mon, 23 Nov 2026 18:00:19 +0000
+Subject: [PATCH 8/9] fix: align POW critical pop and scrolling with native
+ Blizzard FCT
+
+---
+ AnimationPreview.lua |  3 +-
+ Core.lua             | 65 ++++++++++++++++++++++++++++++--------------
+ README.txt           | 10 ++++---
+ 3 files changed, 52 insertions(+), 26 deletions(-)
+
+diff --git a/AnimationPreview.lua b/AnimationPreview.lua
+index a153bae..efe0c9a 100644
+--- a/AnimationPreview.lua
++++ b/AnimationPreview.lua
+@@ -34,7 +34,8 @@ local function profile(db,critical)
+  local hit={mode=mode,dir=dir,vdir=vdir,critical=critical,offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0,
+   offsetY=db[mode..(critical and 'CritY' or 'NormalY')] or 0}
+  if mode=='pow' then
+-  hit.duration=db.powDuration;hit.startY=db.powStartY;hit.fade=55
++  hit.duration=db.powDuration;hit.startY=db.powStartY
++  hit.rise=db.powRise;hit.travel=db.powTravel;hit.fade=db.powFade
+   hit.powEnabled=db.powEnabled;hit.powPhaseDuration=db.powPhaseDuration
+   hit.powRatio=db.powRatio;hit.powInitScale=db.powInitScale
+   hit.powMidScale=db.powMidScale;hit.powEndScale=db.powEndScale
+diff --git a/Core.lua b/Core.lua
+index 827bc2d..b29b958 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -143,9 +143,12 @@ local defaults = {
+  floatDrift=24, floatSway=15, floatFade=56,
+  bounceDuration=1.0, bounceStartY=27, bounceHeight=62,
+  bouncePeak=1.5, bounceDecay=3.0, bounceFade=62, bounceTravel=28,
+- -- ClassicFCT Pow defaults: 0.25 -> 1.55 -> 1, over 30% of a hit.
+- powEnabled=true, powDuration=.9, powStartY=22, powPhaseDuration=.30,
+- powRatio=.70, powInitScale=.25, powMidScale=1.55, powEndScale=1,
++ -- Classic-style Blizzard FCT: crit 1x -> 2x in ~0.05 seconds, then
++ -- back to 1x by ~0.20 seconds. Text scrolls for ~1.9 seconds, with fade
++ -- beginning after ~1.3 seconds. Travel adapts this to nameplate anchors.
++ powEnabled=true, powDuration=1.90, powStartY=22, powRise=130, powTravel=24,
++ powFade=68, powPhaseDuration=.11, powRatio=.25,
++ powInitScale=1, powMidScale=2, powEndScale=1,
+  powNormalX=0, powNormalY=0, powCritX=0, powCritY=0
+ }
+ local ranges = {
+@@ -161,6 +164,7 @@ local ranges = {
+  bouncePeak={1,2.5,.05,2}, bounceDecay={1,7,.25,2}, bounceFade={0,95,1,0},
+  bounceTravel={0,120,1,0},
+  powDuration={.3,3,.05,2}, powStartY={0,100,1,0},
++ powRise={0,250,1,0}, powTravel={0,160,1,0}, powFade={0,95,1,0},
+  powPhaseDuration={.01,1,.01,2}, powRatio={.01,.99,.01,2},
+  powInitScale={.1,5,.01,2}, powMidScale={.1,5,.01,2},
+  powEndScale={.1,5,.01,2}
+@@ -664,17 +668,20 @@ end
+ local function profileMotionAt(hit,p)
+  local mode=hit.mode or 'arc'
+  if mode=='pow' then
+-  -- ClassicFCT-style two-stage crit scale: start -> mid -> end. No copying
+-  -- of third-party engine code, only the numerical behavior/default values.
++  -- Classic Blizzard FCT reference: critical text grows 30 -> 60 in .05s,
++  -- shrinks to 30 by .20s, then scrolls and fades. The crit burst affects
++  -- scale only; both crits and regular hits travel in the selected direction.
+   local scale=1
+   if hit.powEnabled and hit.critical then
+-   local phase=math.min(1,p/math.max(.01,hit.powPhaseDuration or .30))
+-   local ratio=math.max(.01,math.min(.99,hit.powRatio or .70))
+-   local a,b,c=hit.powInitScale or .25,hit.powMidScale or 1.55,hit.powEndScale or 1
++   local phase=math.min(1,p/math.max(.01,hit.powPhaseDuration or .11))
++   local ratio=math.max(.01,math.min(.99,hit.powRatio or .25))
++   local a,b,c=hit.powInitScale or 1,hit.powMidScale or 2,hit.powEndScale or 1
+    if phase<ratio then scale=a+(b-a)*phase/ratio
+    else scale=b+(c-b)*(phase-ratio)/(1-ratio) end
+   end
+-  return 0,hit.startY or 0,scale
++  local x=(hit.dir or 1)*(hit.travel or 0)*p
++  local y=verticalMotionY(hit,(hit.startY or 0)+(hit.rise or 0)*p)
++  return x,y,scale
+  elseif mode=='popup' then
+   local intro=math.max(.05,hit.intro or .18)
+   local hold=math.min(.9,hit.hold or .22)
+@@ -1028,7 +1035,8 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
+   peak,decay=db.bouncePeak,db.bounceDecay
+   travel=db.bounceTravel
+  elseif mode=='pow' then
+-  duration,startY,rise,arc,curve,fade=db.powDuration,db.powStartY,0,0,0,55
++  duration,startY,rise,arc,curve,fade=db.powDuration,db.powStartY,db.powRise,0,0,db.powFade
++  travel=db.powTravel
+  else mode='arc' end
+  fs:SetAlpha(1);fs:Show()
+  local prefix,suffix
+@@ -2187,7 +2195,7 @@ local function createWindow()
+   popup='Scale up, hold, then drift to either side and fade',
+   float='Smooth vertical rise with gentle horizontal sway',
+   bounce='Springy rise with damping and directional drift',
+-  pow='ClassicFCT-inspired two-stage critical scale burst'
++  pow='Blizzard-style critical pop, directional scroll, and soft fade'
+  }
+  local animationSliders={}
+  if _G.ShaaenFCTAnimationPreview then
+@@ -2289,7 +2297,7 @@ local function createWindow()
+   popup={'popupDuration','popupStartY','popupRise','popupPeak','popupIn','popupHold','popupFade','popupTravel','popupDirection','popupVerticalDirection'},
+   float={'floatDuration','floatStartY','floatRise','floatDrift','floatSway','floatFade','floatDirection','floatVerticalDirection'},
+   bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'},
+-  pow={'powEnabled','powDuration','powStartY','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale'}
++  pow={'powEnabled','powDuration','powStartY','powRise','powTravel','powFade','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale'}
+  }
+  for style,keys in pairs(profiles) do
+   for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
+@@ -2422,18 +2430,22 @@ local function createWindow()
+  compactSlider(bouncePane,'bounceDecay','Damping',222,-551,'')
+  compactSlider(bouncePane,'bounceFade','Fade starts at',222,-588,' %')
+  compactSlider(bouncePane,'bounceTravel','Side travel',222,-625,' px')
+- -- POW uses the five original ClassicFCT scale/time parameters with the same
+- -- defaults, plus an independent overall duration and starting height.
++ -- Classic Blizzard FCT-style crit burst and continuous scrolling.
++ -- More compact vertical spacing fits timing, motion and scale without
++ -- hiding any of the normal/critical position offset sliders on the right.
+  local powPane=subTabs.pow
+  compactSlider(powPane,'powDuration','Total duration',222,-403,' s')
+- compactSlider(powPane,'powStartY','Starting height',222,-440,' px')
+- compactSlider(powPane,'powPhaseDuration','Pow duration ratio',222,-477,'')
+- compactSlider(powPane,'powRatio','In / Out ratio',222,-514,'')
+- compactSlider(powPane,'powInitScale','Start scale',222,-551,'x')
+- compactSlider(powPane,'powMidScale','Mid scale',222,-588,'x')
+- compactSlider(powPane,'powEndScale','End scale',222,-625,'x')
++ compactSlider(powPane,'powStartY','Starting height',222,-430,' px')
++ compactSlider(powPane,'powRise','Vertical travel',222,-457,' px')
++ compactSlider(powPane,'powTravel','Side travel',222,-484,' px')
++ compactSlider(powPane,'powFade','Fade starts at',222,-511,' %')
++ compactSlider(powPane,'powPhaseDuration','Crit burst / duration',222,-538,'')
++ compactSlider(powPane,'powRatio','Peak timing ratio',222,-565,'')
++ compactSlider(powPane,'powInitScale','Start scale',222,-592,'x')
++ compactSlider(powPane,'powMidScale','Mid scale',222,-619,'x')
++ compactSlider(powPane,'powEndScale','End scale',222,-646,'x')
+  local powToggle
+- powToggle=toggleRow(powPane,'Enable POW on critical hits',-665,function()
++ powToggle=toggleRow(powPane,'Enable POW on critical hits',-688,function()
+   db.powEnabled=not db.powEnabled
+   powToggle:RefreshSwitch(db.powEnabled)
+   if animationPreview then animationPreview:Refresh(true) end
+@@ -2671,6 +2683,17 @@ engine:SetScript('OnEvent',function(_,event,...)
+    if type(db[key])~='number' then db[key]=defaults[key] end
+    db[key]=math.max(range[1],math.min(range[2],db[key]))
+   end
++  -- One-time native-POW default migration. Never overwrite values that
++  -- differ from the previous defaults (user-customized animation presets).
++  -- New powRise, powTravel and powFade already inherit defaults above.
++  if not db.powNativeDefaultsMigrated then
++   local older={powDuration=.9,powPhaseDuration=.30,powRatio=.70,
++    powInitScale=.25,powMidScale=1.55}
++   for key,oldValue in pairs(older) do
++    if db[key]==oldValue then db[key]=defaults[key] end
++   end
++   db.powNativeDefaultsMigrated=true
++  end
+   if type(db.showKillingBlow)~='boolean' then db.showKillingBlow=true end
+   if type(db.plateDisplayEnabled)~='boolean' then db.plateDisplayEnabled=true end
+   if type(db.petAssist)~='boolean' then db.petAssist=true end
+diff --git a/README.txt b/README.txt
+index 5299a16..b02bbc7 100644
+--- a/README.txt
++++ b/README.txt
+@@ -11,10 +11,12 @@ UNPUBLISHED LOCAL CHANGES (5 SEPARATE COMMITS, NO TAG OR PUSH)
+   announcements do NOT independently verify that GitHub published a release.
+   Use /sfct versiontest for a demo popup, or /sfct versioncheck to re-check
+   known peer versions and announce your installed build.
+-- Animation > POW is a fifth tab with ClassicFCT-style two-stage scaling
+-  on critical hits. ClassicFCT defaults: Start 0.25x, Mid 1.55x, End 1.00x,
+-  POW duration ratio 0.30, In/Out ratio 0.70; all are adjustable. Overall
+-  duration, initial height and independent normal/crit offsets are editable.
++- Animation > POW is a fifth tab with Blizzard-native-inspired critical
++  text: 1x -> 2x over about 0.05s, then back to 1x by ~0.20s. Total scroll
++  duration is 1.90s and fading starts near 1.30s. POW uses directional
++  travel, initial height and independent normal/crit offsets. All timings,
++  travel, fade and scale values are adjustable. Existing customized POW
++  presets are preserved when possible; older untouched defaults migrate.
+ - Settings > General > Blizzard FCT replaces Blizzard / Native damage.
+ - While Blizzard FCT is OFF, supported native floating-combat-text CVars
+   are set to 0, including available experience-text aliases. The original
+-- 
+2.47.3
+
+
+From 8dc021212b66ad38a03f0f16fe36dbc57937fe21 Mon Sep 17 00:00:00 2001
+From: ShaaenFCT Local Changes <local-changes@localhost>
+Date: Mon, 23 Nov 2026 18:00:46 +0000
+Subject: [PATCH 9/9] feat: add independent POW horizontal and vertical
+ direction controls
+
+---
+ AnimationPreview.lua |  4 ++--
+ Core.lua             | 29 +++++++++++++++--------------
+ README.txt           |  3 +++
+ 3 files changed, 20 insertions(+), 16 deletions(-)
+
+diff --git a/AnimationPreview.lua b/AnimationPreview.lua
+index efe0c9a..bedffe7 100644
+--- a/AnimationPreview.lua
++++ b/AnimationPreview.lua
+@@ -22,9 +22,9 @@ end
+ 
+ local function profile(db,critical)
+  local mode=db.animationStyle or 'arc'
+- local directionField=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'})[mode] or 'direction'
++ local directionField=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection',pow='powDirection'})[mode] or 'direction'
+  local direction=db[directionField] or 'alternate'
+- local verticalField=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'})[mode] or 'verticalDirection'
++ local verticalField=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection',pow='powVerticalDirection'})[mode] or 'verticalDirection'
+  local vChoice=db[verticalField] or 'up'
+  local vdir=(vChoice=='down' or (vChoice=='alternate' and critical)) and -1 or 1
+  if vChoice=='random' then vdir=math.random(2)==1 and 1 or -1 end
+diff --git a/Core.lua b/Core.lua
+index b29b958..d60f415 100644
+--- a/Core.lua
++++ b/Core.lua
+@@ -129,8 +129,8 @@ local defaults = {
+  uiColorStyle='ember', settingsSection='general', windowScale=100, windowOpacity=100,
+  outline=true, size=27, critScale=1.5, duration=.9, startY=22,
+  rise=65, arc=65, curve=40, fade=55, direction='alternate', animationStyle='arc',
+- popupDirection='alternate', floatDirection='alternate', bounceDirection='alternate',
+- verticalDirection='up', popupVerticalDirection='up', floatVerticalDirection='up', bounceVerticalDirection='up',
++ popupDirection='alternate', floatDirection='alternate', bounceDirection='alternate', powDirection='alternate',
++ verticalDirection='up', popupVerticalDirection='up', floatVerticalDirection='up', bounceVerticalDirection='up', powVerticalDirection='up',
+  -- Pixel offsets are independent for each animation style and hit category.
+  arcNormalX=0, arcNormalY=0, arcCritX=0, arcCritY=0,
+  popupNormalX=0, popupNormalY=0, popupCritX=0, popupCritY=0,
+@@ -1007,7 +1007,7 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
+  if not ok then fs:Hide();fs:SetParent(UIParent);pool[#pool+1]=fs;return false end
+  -- A different direction can be selected for each animation profile.
+  -- Only user settings (never secret combat values) are inspected here.
+- local directionKey=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'})[mode] or 'direction'
++ local directionKey=({arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection',pow='powDirection'})[mode] or 'direction'
+  local choice=db[directionKey] or 'alternate'
+  directionIndex=directionIndex+1
+  local dir
+@@ -1015,7 +1015,7 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
+  elseif choice=='right' then dir=1
+  elseif choice=='random' then dir=(math.random(2)==1) and -1 or 1
+  else dir=(directionIndex%2==0) and 1 or -1 end
+- local verticalKey=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'})[mode] or 'verticalDirection'
++ local verticalKey=({arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection',pow='powVerticalDirection'})[mode] or 'verticalDirection'
+  local verticalChoice=db[verticalKey] or 'up'
+  local vdir=1
+  if verticalChoice=='down' then vdir=-1
+@@ -2297,7 +2297,7 @@ local function createWindow()
+   popup={'popupDuration','popupStartY','popupRise','popupPeak','popupIn','popupHold','popupFade','popupTravel','popupDirection','popupVerticalDirection'},
+   float={'floatDuration','floatStartY','floatRise','floatDrift','floatSway','floatFade','floatDirection','floatVerticalDirection'},
+   bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'},
+-  pow={'powEnabled','powDuration','powStartY','powRise','powTravel','powFade','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale'}
++  pow={'powEnabled','powDuration','powStartY','powRise','powTravel','powFade','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale','powDirection','powVerticalDirection'}
+  }
+  for style,keys in pairs(profiles) do
+   for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
+@@ -2332,7 +2332,7 @@ local function createWindow()
+   end)
+   local p=CreateFrame('Frame',nil,animation)
+   p:SetAllPoints(animation);p:Hide();subTabs[key]=p
+-  label(p,subDescriptions[key],220,-352,11,.67,.71,.77)
++  if key~='pow' then label(p,subDescriptions[key],220,-352,11,.67,.71,.77) end
+   local separator=fixedTexture(p,'TOPLEFT',460,-378,1,322,.25,.28,.33,.8)
+   addResponsive(function(extra) anchorTopLeft(separator,p,460+extra/2,-378) end)
+   label(p,'MOTION / TIMING',222,-382,11,1,.63,.35)
+@@ -2353,15 +2353,15 @@ local function createWindow()
+  compactSlider(arcPane,'fade','Fade starts at',222,-588,' %')
+  -- Horizontal and vertical direction selectors for each animation profile.
+  -- Dropdown menus open upwards, so the 760px minimum window does not clip them.
+- local directionFields={arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection'}
+- local verticalFields={arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection'}
++ local directionFields={arc='direction',popup='popupDirection',float='floatDirection',bounce='bounceDirection',pow='powDirection'}
++ local verticalFields={arc='verticalDirection',popup='popupVerticalDirection',float='floatVerticalDirection',bounce='bounceVerticalDirection',pow='powVerticalDirection'}
+  local function redrawDirection(style)
+   for _,entry in pairs(directionMenus[style] or {}) do
+    local value=db[entry.field] or entry.default
+    entry.trigger.caption:SetText(entry.title..': '..string.upper(value))
+   end
+  end
+- for _,style in ipairs({'arc','popup','float','bounce'}) do
++ for _,style in ipairs({'arc','popup','float','bounce','pow'}) do
+   local parent=subTabs[style]
+   directionMenus[style]={}
+   local function makeSelector(axis,title,field,y,options,default)
+@@ -2445,7 +2445,8 @@ local function createWindow()
+  compactSlider(powPane,'powMidScale','Mid scale',222,-619,'x')
+  compactSlider(powPane,'powEndScale','End scale',222,-646,'x')
+  local powToggle
+- powToggle=toggleRow(powPane,'Enable POW on critical hits',-688,function()
++ -- Place the switch in POW's subtitle strip: the footer begins at y=-704.
++ powToggle=toggleRow(powPane,'Enable POW on critical hits',-347,function()
+   db.powEnabled=not db.powEnabled
+   powToggle:RefreshSwitch(db.powEnabled)
+   if animationPreview then animationPreview:Refresh(true) end
+@@ -2460,8 +2461,8 @@ local function createWindow()
+     if widget.edit then widget.edit:SetText(string.format('%d',defaults[key])) end
+    end
+   end
+-  if db.animationStyle=='pow' then powToggle:RefreshSwitch(db.powEnabled)
+-  else redrawDirection(db.animationStyle) end
++  if db.animationStyle=='pow' then powToggle:RefreshSwitch(db.powEnabled) end
++  redrawDirection(db.animationStyle)
+   if animationPreview then animationPreview:Refresh(true) end
+  end)
+  local previewStyleButton=button(animation,'PREVIEW STYLE',469,-262,250,32,function()
+@@ -2705,12 +2706,12 @@ engine:SetScript('OnEvent',function(_,event,...)
+   db.windowScale=math.max(75,math.min(120,math.floor(db.windowScale+.5)))
+   if type(db.windowOpacity)~='number' or db.windowOpacity~=db.windowOpacity then db.windowOpacity=100 end
+   db.windowOpacity=math.max(30,math.min(100,math.floor(db.windowOpacity+.5)))
+-  for _,field in ipairs({'direction','popupDirection','floatDirection','bounceDirection'}) do
++  for _,field in ipairs({'direction','popupDirection','floatDirection','bounceDirection','powDirection'}) do
+    if db[field]~='alternate' and db[field]~='left' and db[field]~='right' and db[field]~='random' then
+     db[field]='alternate'
+    end
+   end
+-  for _,field in ipairs({'verticalDirection','popupVerticalDirection','floatVerticalDirection','bounceVerticalDirection'}) do
++  for _,field in ipairs({'verticalDirection','popupVerticalDirection','floatVerticalDirection','bounceVerticalDirection','powVerticalDirection'}) do
+    if db[field]~='up' and db[field]~='down' and db[field]~='alternate' and db[field]~='random' then db[field]='up' end
+   end
+   if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' and db.animationStyle~='pow' then db.animationStyle='arc' end
+diff --git a/README.txt b/README.txt
+index b02bbc7..c37ffa0 100644
+--- a/README.txt
++++ b/README.txt
+@@ -17,6 +17,9 @@ UNPUBLISHED LOCAL CHANGES (5 SEPARATE COMMITS, NO TAG OR PUSH)
+   travel, initial height and independent normal/crit offsets. All timings,
+   travel, fade and scale values are adjustable. Existing customized POW
+   presets are preserved when possible; older untouched defaults migrate.
++  POW has HORIZONTAL (LEFT / RIGHT / ALTERNATE / RANDOM) and VERTICAL
++  (UP / DOWN / ALTERNATE / RANDOM) dropdowns, like Arc/Popup/Float/Bounce.
++  Side travel and vertical travel sliders set how far each direction moves.
+ - Settings > General > Blizzard FCT replaces Blizzard / Native damage.
+ - While Blizzard FCT is OFF, supported native floating-combat-text CVars
+   are set to 0, including available experience-text aliases. The original
+-- 
+2.47.3
+
