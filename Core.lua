@@ -142,7 +142,11 @@ local defaults = {
  floatDuration=1.15, floatStartY=32, floatRise=110,
  floatDrift=24, floatSway=15, floatFade=56,
  bounceDuration=1.0, bounceStartY=27, bounceHeight=62,
- bouncePeak=1.5, bounceDecay=3.0, bounceFade=62, bounceTravel=28
+ bouncePeak=1.5, bounceDecay=3.0, bounceFade=62, bounceTravel=28,
+ -- ClassicFCT Pow defaults: 0.25 -> 1.55 -> 1, over 30% of a hit.
+ powEnabled=true, powDuration=.9, powStartY=22, powPhaseDuration=.30,
+ powRatio=.70, powInitScale=.25, powMidScale=1.55, powEndScale=1,
+ powNormalX=0, powNormalY=0, powCritX=0, powCritY=0
 }
 local ranges = {
  duration={.3,2.5,.05,2}, startY={5,100,1,0}, rise={0,160,1,0},
@@ -155,11 +159,15 @@ local ranges = {
  floatDrift={0,120,1,0}, floatSway={0,80,1,0}, floatFade={0,95,1,0},
  bounceDuration={.3,3,.05,2}, bounceStartY={5,110,1,0}, bounceHeight={0,150,1,0},
  bouncePeak={1,2.5,.05,2}, bounceDecay={1,7,.25,2}, bounceFade={0,95,1,0},
- bounceTravel={0,120,1,0}
+ bounceTravel={0,120,1,0},
+ powDuration={.3,3,.05,2}, powStartY={0,100,1,0},
+ powPhaseDuration={.01,1,.01,2}, powRatio={.01,.99,.01,2},
+ powInitScale={.1,5,.01,2}, powMidScale={.1,5,.01,2},
+ powEndScale={.1,5,.01,2}
 }
 -- Signed offsets are intentionally in pixels: left/down are negative.
 -- Unlike secret combat amounts, these are normal user-provided numbers.
-for _,style in ipairs({'arc','popup','float','bounce'}) do
+for _,style in ipairs({'arc','popup','float','bounce','pow'}) do
  for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
   ranges[style..suffix]={-250,250,1,0}
  end
@@ -605,7 +613,19 @@ local function verticalMotionY(hit,value)
 end
 local function profileMotionAt(hit,p)
  local mode=hit.mode or 'arc'
- if mode=='popup' then
+ if mode=='pow' then
+  -- ClassicFCT-style two-stage crit scale: start -> mid -> end. No copying
+  -- of third-party engine code, only the numerical behavior/default values.
+  local scale=1
+  if hit.powEnabled and hit.critical then
+   local phase=math.min(1,p/math.max(.01,hit.powPhaseDuration or .30))
+   local ratio=math.max(.01,math.min(.99,hit.powRatio or .70))
+   local a,b,c=hit.powInitScale or .25,hit.powMidScale or 1.55,hit.powEndScale or 1
+   if phase<ratio then scale=a+(b-a)*phase/ratio
+   else scale=b+(c-b)*(phase-ratio)/(1-ratio) end
+  end
+  return 0,hit.startY or 0,scale
+ elseif mode=='popup' then
   local intro=math.max(.05,hit.intro or .18)
   local hold=math.min(.9,hit.hold or .22)
   local peak=hit.peak or 1.8
@@ -905,7 +925,8 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
  local initialY=db.startY
  if db.animationStyle=='popup' then initialY=db.popupStartY
  elseif db.animationStyle=='float' then initialY=db.floatStartY
- elseif db.animationStyle=='bounce' then initialY=db.bounceStartY end
+ elseif db.animationStyle=='bounce' then initialY=db.bounceStartY
+ elseif db.animationStyle=='pow' then initialY=db.powStartY end
  if isHeal then placePlayerHeal(fs,plate,offsetX,initialY+offsetY)
  elseif detached and position then fs:SetPoint('CENTER',fxLayer,'BOTTOMLEFT',position.x+offsetX,position.y+initialY+offsetY)
  elseif anchor then fs:SetPoint('CENTER',anchor,'CENTER',offsetX,initialY+offsetY)
@@ -956,6 +977,8 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
   duration,startY,rise,arc,curve,fade=db.bounceDuration,db.bounceStartY,db.bounceHeight,0,0,db.bounceFade
   peak,decay=db.bouncePeak,db.bounceDecay
   travel=db.bounceTravel
+ elseif mode=='pow' then
+  duration,startY,rise,arc,curve,fade=db.powDuration,db.powStartY,0,0,0,55
  else mode='arc' end
  fs:SetAlpha(1);fs:Show()
  local prefix,suffix
@@ -967,6 +990,9 @@ local function startNumber(plate,amount,critical,preview,allowRemoved,isNotice,i
   duration=duration,startY=startY,rise=rise,arc=arc,curve=curve,fade=fade,
   peak=peak,intro=intro,hold=hold,drift=drift,sway=sway,decay=decay,travel=travel,
   offsetX=offsetX,offsetY=offsetY,
+  powEnabled=db.powEnabled,critical=critical,
+  powPhaseDuration=db.powPhaseDuration,powRatio=db.powRatio,
+  powInitScale=db.powInitScale,powMidScale=db.powMidScale,powEndScale=db.powEndScale,
   baseSize=baseSize,fontName=fontName,lastScale=1,xp=isXP}
  if not isNotice and not isHeal then
   if blockKind then hit.statusLabel=createStatusLabel(fs,fontName,baseSize,'BLOCKED')
@@ -2105,12 +2131,13 @@ local function createWindow()
  -- ANIMATION / split controls: motion at left, normal and critical offsets at right.
  header(animation,'Animation styles','Select a style and fine-tune its movement and hit positions')
  local subTabs,subButtons={},{}
- local subNames={arc='ARC',popup='POPUP',float='FLOAT',bounce='BOUNCE'}
+ local subNames={arc='ARC',popup='POPUP',float='FLOAT',bounce='BOUNCE',pow='POW'}
  local subDescriptions={
   arc='Curved rising trajectory with directional travel',
   popup='Scale up, hold, then drift to either side and fade',
   float='Smooth vertical rise with gentle horizontal sway',
-  bounce='Springy rise with damping and directional drift'
+  bounce='Springy rise with damping and directional drift',
+  pow='ClassicFCT-inspired two-stage critical scale burst'
  }
  local animationSliders={}
  if _G.ShaaenFCTAnimationPreview then
@@ -2211,7 +2238,8 @@ local function createWindow()
   arc={'duration','startY','rise','arc','curve','fade','direction','verticalDirection'},
   popup={'popupDuration','popupStartY','popupRise','popupPeak','popupIn','popupHold','popupFade','popupTravel','popupDirection','popupVerticalDirection'},
   float={'floatDuration','floatStartY','floatRise','floatDrift','floatSway','floatFade','floatDirection','floatVerticalDirection'},
-  bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'}
+  bounce={'bounceDuration','bounceStartY','bounceHeight','bouncePeak','bounceDecay','bounceFade','bounceTravel','bounceDirection','bounceVerticalDirection'},
+  pow={'powEnabled','powDuration','powStartY','powPhaseDuration','powRatio','powInitScale','powMidScale','powEndScale'}
  }
  for style,keys in pairs(profiles) do
   for _,suffix in ipairs({'NormalX','NormalY','CritX','CritY'}) do
@@ -2234,12 +2262,13 @@ local function createWindow()
    b.stripe:SetAlpha(chosen and 1 or 0)
   end
  end
- for idx,key in ipairs({'arc','popup','float','bounce'}) do
-  local x=216+(idx-1)*127
-  subButtons[key]=button(animation,subNames[key],x,-306,119,34,function() selectAnimationStyle(key) end)
+ for idx,key in ipairs({'arc','popup','float','bounce','pow'}) do
+  local tabWidth=(500-4*8)/5
+  local x=216+(idx-1)*(tabWidth+8)
+  subButtons[key]=button(animation,subNames[key],x,-306,tabWidth,34,function() selectAnimationStyle(key) end)
   local animButton=subButtons[key]
   addResponsive(function(extra)
-   local width=(500+extra-24)/4
+   local width=(500+extra-4*8)/5
    animButton:SetSize(width,34)
    anchorTopLeft(animButton,animation,216+(idx-1)*(width+8),-306)
   end)
@@ -2343,6 +2372,23 @@ local function createWindow()
  compactSlider(bouncePane,'bounceDecay','Damping',222,-551,'')
  compactSlider(bouncePane,'bounceFade','Fade starts at',222,-588,' %')
  compactSlider(bouncePane,'bounceTravel','Side travel',222,-625,' px')
+ -- POW uses the five original ClassicFCT scale/time parameters with the same
+ -- defaults, plus an independent overall duration and starting height.
+ local powPane=subTabs.pow
+ compactSlider(powPane,'powDuration','Total duration',222,-403,' s')
+ compactSlider(powPane,'powStartY','Starting height',222,-440,' px')
+ compactSlider(powPane,'powPhaseDuration','Pow duration ratio',222,-477,'')
+ compactSlider(powPane,'powRatio','In / Out ratio',222,-514,'')
+ compactSlider(powPane,'powInitScale','Start scale',222,-551,'x')
+ compactSlider(powPane,'powMidScale','Mid scale',222,-588,'x')
+ compactSlider(powPane,'powEndScale','End scale',222,-625,'x')
+ local powToggle
+ powToggle=toggleRow(powPane,'Enable POW on critical hits',-665,function()
+  db.powEnabled=not db.powEnabled
+  powToggle:RefreshSwitch(db.powEnabled)
+  if animationPreview then animationPreview:Refresh(true) end
+ end)
+ powToggle:RefreshSwitch(db.powEnabled)
  local resetStyleButton=button(animation,'RESET THIS STYLE',220,-262,235,32,function()
   for _,key in ipairs(profiles[db.animationStyle] or profiles.arc) do db[key]=defaults[key] end
   for _,key in ipairs(profiles[db.animationStyle] or profiles.arc) do
@@ -2352,7 +2398,8 @@ local function createWindow()
     if widget.edit then widget.edit:SetText(string.format('%d',defaults[key])) end
    end
   end
-  redrawDirection(db.animationStyle)
+  if db.animationStyle=='pow' then powToggle:RefreshSwitch(db.powEnabled)
+  else redrawDirection(db.animationStyle) end
   if animationPreview then animationPreview:Refresh(true) end
  end)
  local previewStyleButton=button(animation,'PREVIEW STYLE',469,-262,250,32,function()
@@ -2593,7 +2640,8 @@ engine:SetScript('OnEvent',function(_,event,...)
   for _,field in ipairs({'verticalDirection','popupVerticalDirection','floatVerticalDirection','bounceVerticalDirection'}) do
    if db[field]~='up' and db[field]~='down' and db[field]~='alternate' and db[field]~='random' then db[field]='up' end
   end
-  if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' then db.animationStyle='arc' end
+  if db.animationStyle~='arc' and db.animationStyle~='popup' and db.animationStyle~='float' and db.animationStyle~='bounce' and db.animationStyle~='pow' then db.animationStyle='arc' end
+ if type(db.powEnabled)~='boolean' then db.powEnabled=true end
   -- v0.7.42 removes the selectable Smart mode. Keep player / all choices.
   if db.damageSource~='coverage' and db.damageSource~='player' and db.damageSource~='all' then db.damageSource='coverage' end
   db.settingsVersion=9

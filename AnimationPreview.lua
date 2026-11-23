@@ -31,9 +31,14 @@ local function profile(db,critical)
  local dir=critical and 1 or -1
  if direction=='left' then dir=-1 elseif direction=='right' then dir=1
  elseif direction=='random' then dir=math.random(2)==1 and -1 or 1 end
- local hit={mode=mode,dir=dir,vdir=vdir,offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0,
+ local hit={mode=mode,dir=dir,vdir=vdir,critical=critical,offsetX=db[mode..(critical and 'CritX' or 'NormalX')] or 0,
   offsetY=db[mode..(critical and 'CritY' or 'NormalY')] or 0}
- if mode=='popup' then
+ if mode=='pow' then
+  hit.duration=db.powDuration;hit.startY=db.powStartY;hit.fade=55
+  hit.powEnabled=db.powEnabled;hit.powPhaseDuration=db.powPhaseDuration
+  hit.powRatio=db.powRatio;hit.powInitScale=db.powInitScale
+  hit.powMidScale=db.powMidScale;hit.powEndScale=db.powEndScale
+ elseif mode=='popup' then
   hit.duration=db.popupDuration;hit.startY=db.popupStartY;hit.rise=db.popupRise
   hit.travel=db.popupTravel;hit.peak=db.popupPeak
   hit.intro=db.popupIn/100;hit.hold=db.popupHold/100;hit.fade=db.popupFade
