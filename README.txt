@@ -1,6 +1,29 @@
 shaaenFCT 0.7.47 | WoW Forever (Interface 16001)
 ===================================
 
+UNPUBLISHED LOCAL CHANGES (5 SEPARATE COMMITS, NO TAG OR PUSH)
+==============================================================
+- All switch rows now use matching, interface-font-aware ON/OFF typography.
+- New VersionNotifier.lua warns about a newer addon version learned from
+  another player via WoW addon messages, then offers the GitHub Releases
+  URL (https://github.com/NLshaen/ShaaenFCT/releases/latest).
+  IMPORTANT: WoW does not provide addons with direct HTTP requests. Peer
+  announcements do NOT independently verify that GitHub published a release.
+  Use /sfct versiontest for a demo popup, or /sfct versioncheck to re-check
+  known peer versions and announce your installed build.
+- Animation > POW is a fifth tab with ClassicFCT-style two-stage scaling
+  on critical hits. ClassicFCT defaults: Start 0.25x, Mid 1.55x, End 1.00x,
+  POW duration ratio 0.30, In/Out ratio 0.70; all are adjustable. Overall
+  duration, initial height and independent normal/crit offsets are editable.
+- Settings > General > Blizzard FCT replaces Blizzard / Native damage.
+- While Blizzard FCT is OFF, supported native floating-combat-text CVars
+  are set to 0, including available experience-text aliases. The original
+  values are saved and restored when selecting Blizzard FCT again.
+  WoW Forever may still draw some XP notices as world text without any
+  supported CVar; these cannot be guaranteed hidden via addon CVars.
+  Unrelated XP bar CVars are never modified.
+- The addon version stays 0.7.47. No GitHub tag/release/push was created.
+
 LOCAL FEATURE BRANCH 0.7.47  (not pushed to GitHub)
 - Settings > General: clickable on/off switches for addon, Coverage,
   Blizzard, All, Combat Log, own-pet target tracking and Overkill. Combat

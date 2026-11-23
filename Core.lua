@@ -398,26 +398,76 @@ local function clearQueues()
  foreignKillPlates=setmetatable({}, {__mode='k'})
  confirmedPersonalKills=setmetatable({}, {__mode='k'})
 end
-local function enableNative()
- local key='floatingCombatTextCombatDamage_v2'
+-- Blizzard's floating text has many independent CVars. Disable only supported
+-- boolean switches, including XP aliases. Some Forever world-space XP notices
+-- may have no public suppressible CVar: never modify unrelated XP UI settings.
+local nativeFCTFlags={
+ 'enableFloatingCombatText',
+ 'floatingCombatTextCombatDamage', 'floatingCombatTextCombatHealing',
+ 'floatingCombatTextCombatHealingAbsorbSelf', 'floatingCombatTextCombatHealingAbsorbTarget',
+ 'floatingCombatTextCombatLogPeriodicSpells',
+ 'floatingCombatTextCombatDamageAllAutos','floatingCombatTextCombatDamageAllHits',
+ 'floatingCombatTextPetMeleeDamage','floatingCombatTextPetSpellDamage',
+ 'floatingCombatTextAuras','floatingCombatTextDodgeParryMiss',
+ 'floatingCombatTextDamageReduction','floatingCombatTextRepChanges',
+ 'floatingCombatTextEnergyGains','floatingCombatTextPeriodicEnergyGains',
+ 'floatingCombatTextComboPoints','floatingCombatTextHonorGains',
+ 'floatingCombatTextLowManaHealth','floatingCombatTextReactiveAbilities',
+ 'floatingCombatTextFriendlyHealers','floatingCombatTextCombatState',
+ 'floatingCombatTextSpellMechanics','floatingCombatTextSpellMechanicsOther',
+ 'floatingCombatTextXPChanges','floatingCombatTextExperienceGained',
+ 'floatingCombatTextExperienceGains','floatingCombatTextExperience'
+}
+local function nativeGet(key)
  local get=GetCVar or (C_CVar and C_CVar.GetCVar)
+ if type(get)~='function' then return nil end
+ local ok,value=pcall(get,key)
+ -- Unknown / protected / numerical mode CVars must not be overwritten.
+ if ok and (value=='0' or value=='1') then return value end
+end
+local function nativeSet(key,value)
  local set=SetCVar or (C_CVar and C_CVar.SetCVar)
- if type(get)=='function' then
-  local ok,value=pcall(get,key)
-  if ok and value=='1' then return end
- end
- if type(set)=='function' then
-  local ok=pcall(set,key,'1')
-  if ok then return end
- end
- if not filterWarned then
-  filterWarned=true
-  say('Unable to enable Blizzard combat text automatically: /console floatingCombatTextCombatDamage_v2 1')
+ if type(set)~='function' then return false end
+ local ok=pcall(set,key,value)
+ return ok
+end
+local function eachNativeFlag(callback)
+ for _,base in ipairs(nativeFCTFlags) do
+  -- Forever has moved most combat text switches to *_v2, but not all.
+  local v2=base..'_v2'
+  if nativeGet(v2)~=nil then callback(v2) end
+  if nativeGet(base)~=nil then callback(base) end
  end
 end
 local function disableNative()
- local set=SetCVar or (C_CVar and C_CVar.SetCVar)
- if type(set)=='function' then pcall(set,'floatingCombatTextCombatDamage_v2','0') end
+ if not db then return end
+ db.nativeFCTBackup=type(db.nativeFCTBackup)=='table' and db.nativeFCTBackup or {}
+ eachNativeFlag(function(key)
+  local before=nativeGet(key)
+  if before~=nil then
+   -- Capture once. Never replace a user's original ON value with our own OFF.
+   if db.nativeFCTBackup[key]==nil then db.nativeFCTBackup[key]=before end
+   if before~='0' then nativeSet(key,'0') end
+  end
+ end)
+end
+local function enableNative()
+ if not db then return end
+ eachNativeFlag(function(key)
+  local saved=db.nativeFCTBackup and db.nativeFCTBackup[key]
+  if saved=='0' or saved=='1' then nativeSet(key,saved) end
+ end)
+ -- Native mode must always actually display Blizzard damage numbers even
+ -- when first installed with that setting already disabled.
+ if nativeGet('floatingCombatTextCombatDamage_v2')~=nil then
+  nativeSet('floatingCombatTextCombatDamage_v2','1')
+ elseif nativeGet('floatingCombatTextCombatDamage')~=nil then
+  nativeSet('floatingCombatTextCombatDamage','1')
+ elseif not filterWarned then
+  filterWarned=true
+  say('Blizzard FCT damage CVar is unavailable on this client.')
+ end
+ if nativeGet('enableFloatingCombatText')~=nil then nativeSet('enableFloatingCombatText','1') end
 end
 local function enableFilteredLog()
  if not db or db.combatLogEnabled==false then return end
@@ -430,7 +480,7 @@ local function setSource(source)
  db.damageSource=source
  if source=='coverage' then db.plateDisplayEnabled=true end
  clearNumbers();clearQueues()
- if db.enabled and source=='player' then enableNative() else disableNative() end
+ if source=='player' then enableNative() else disableNative() end
  if source=='coverage' then enableFilteredLog() end
 end
 -- Do not read, compare, stringify or calculate with protected combat amounts.
@@ -1860,8 +1910,8 @@ local function createWindow()
  local enabled=toggleRow(general,'Enable addon',-216,function()
   db.enabled=not db.enabled
   clearNumbers();clearQueues()
-  if not db.enabled or db.damageSource=='player' then enableNative()
-  else disableNative();if db.damageSource=='coverage' then enableFilteredLog() end end
+  if db.damageSource=='player' then enableNative()
+  else disableNative();if db.enabled and db.damageSource=='coverage' then enableFilteredLog() end end
   refreshGeneral()
  end)
  section(general,'COMBAT TEXT MODE',-259)
@@ -2645,17 +2695,17 @@ engine:SetScript('OnEvent',function(_,event,...)
   -- v0.7.42 removes the selectable Smart mode. Keep player / all choices.
   if db.damageSource~='coverage' and db.damageSource~='player' and db.damageSource~='all' then db.damageSource='coverage' end
   db.settingsVersion=9
-  if db.enabled then
-   if db.damageSource=='player' then enableNative() else disableNative() end
-   if db.damageSource=='coverage' then enableFilteredLog() end
-  end
+  if db.damageSource=='player' then enableNative() else disableNative() end
+  if db.enabled and db.damageSource=='coverage' then enableFilteredLog() end
   say('v'..addonVersion()..' loaded / '..db.damageSource..' mode /sfct')
  elseif event=='PLAYER_LOGIN' then
   xpPrevious,xpPreviousMax=snapshotXP()
   if db and db.enabled and db.damageSource=='coverage' then enableFilteredLog() end
  elseif event=='PLAYER_ENTERING_WORLD' or event=='PLAYER_REGEN_ENABLED' then
   if event=='PLAYER_ENTERING_WORLD' then xpPrevious,xpPreviousMax=snapshotXP() end
-  if db and db.enabled and db.damageSource=='player' then enableNative() end
+  if db then
+   if db.damageSource=='player' then enableNative() else disableNative() end
+  end
  elseif event=='PLAYER_XP_UPDATE' then
   showXPUpdate()
  elseif event=='UNIT_SPELLCAST_SUCCEEDED' then
@@ -2910,7 +2960,9 @@ SlashCmdList.SHAAENFCT=function(msg)
  end
  if msg=='open' or msg=='options' then createWindow():Show();return end
  if msg=='close' then if window then window:Hide() end;return end
- if msg=='off' then db.enabled=false;clearNumbers();clearQueues();enableNative();say('disabled');return end
+  if msg=='off' then db.enabled=false;clearNumbers();clearQueues();
+   if db.damageSource=='player' then enableNative() else disableNative() end
+   say('disabled');return end
  if msg=='on' then db.enabled=true;setSource(db.damageSource);say('enabled');return end
  local w=createWindow()
  if w:IsShown() then w:Hide() else w:Show() end
