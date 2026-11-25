@@ -1,4 +1,4 @@
-# shaaenFCT
+# ShaaenFCT
 
 Floating combat text addon for **WoW Forever**.
 
